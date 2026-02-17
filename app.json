@@ -20,7 +20,15 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": {
+            "scheme": "whatsapp"
+          }
+        }
+      ]
     },
     "web": {
       "output": "static",
@@ -44,6 +52,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f02368d6-729e-4ed8-8c74-b358b1f300cf"
+      }
     }
   }
 }

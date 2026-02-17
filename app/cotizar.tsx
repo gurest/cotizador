@@ -1,3 +1,10 @@
+import {
+  calcularPresupuesto,
+  type ConfigPrecios,
+  type DatosCotizacion,
+  type TipoColumna,
+  type TipoViga,
+} from '@/utils/calculator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState } from 'react';
 import {
@@ -10,13 +17,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {
-  calcularPresupuesto,
-  type ConfigPrecios,
-  type DatosCotizacion,
-  type TipoColumna,
-  type TipoViga,
-} from '@/utils/calculator';
 
 const STORAGE_KEY_PRECIOS = '@cotizador_precios';
 const STORAGE_KEY_HISTORIAL = '@cotizador_historial';
@@ -50,6 +50,9 @@ export type ItemHistorial = {
   tipoHormigon?: string;
   espesorPiso?: string;
   terminacionPiso?: string;
+  // NUEVOS CAMPOS
+  distanciaKm?: number;
+  incluirElevacion?: boolean;
 };
 
 const configPreciosPorDefecto: ConfigPrecios = {
@@ -63,7 +66,7 @@ const configPreciosPorDefecto: ConfigPrecios = {
   ingenieriaPlanos: 800,
   pinturaTratamiento: 5,
   mediosElevacion: 600,
-  logisticaFletes: 400,
+  logisticaFletes: 4, // Valor por defecto por KM (ajustable en config)
   viaticos: 300,
   margenGanancia: 15,
   imprevistosContingencia: 5,
@@ -223,6 +226,10 @@ export default function CotizarScreen() {
   const [espesorPiso, setEspesorPiso] = useState<EspesorPiso | ''>('');
   const [terminacionPiso, setTerminacionPiso] = useState<TerminacionPiso | ''>('');
 
+  // NUEVOS ESTADOS LOGÍSTICA
+  const [distanciaKm, setDistanciaKm] = useState('');
+  const [incluirElevacion, setIncluirElevacion] = useState(false);
+
   const handleCalcular = async () => {
     let config: ConfigPrecios = { ...configPreciosPorDefecto };
     try {
@@ -268,8 +275,25 @@ export default function CotizarScreen() {
       aislacionFrenteFondo,
     };
 
-    const resultado = calcularPresupuesto(datos, config);
-    setResultadoCalculo(resultado.total);
+    const resultadoBase = calcularPresupuesto(datos, config);
+    let totalCalculado = resultadoBase.total;
+
+    // --- CÁLCULO DE ADICIONALES (Logística y Elevación) ---
+    
+    // 1. Flete: (Km * Precio por Km)
+    const km = parseFloat(distanciaKm) || 0;
+    if (km > 0) {
+      // Usamos 'logisticaFletes' como valor unitario por Km
+      const costoFlete = km * config.logisticaFletes;
+      totalCalculado += costoFlete;
+    }
+
+    // 2. Medios de Elevación
+    if (incluirElevacion) {
+      totalCalculado += config.mediosElevacion;
+    }
+
+    setResultadoCalculo(totalCalculado);
   };
 
   const handleGuardarHistorial = async () => {
@@ -308,6 +332,9 @@ export default function CotizarScreen() {
       tipoHormigon: tipoHormigon || undefined,
       espesorPiso: espesorPiso || undefined,
       terminacionPiso: terminacionPiso || undefined,
+      // Guardamos los nuevos datos
+      distanciaKm: parseFloat(distanciaKm) || 0,
+      incluirElevacion: incluirElevacion,
     };
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEY_HISTORIAL);
@@ -501,6 +528,23 @@ export default function CotizarScreen() {
         )}
       </View>
 
+      {/* --- NUEVA SECCIÓN: LOGÍSTICA Y EQUIPOS --- */}
+      <Text style={styles.sectionTitle}>Logística y Equipos</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Distancia a la obra (km ida y vuelta)"
+        value={distanciaKm}
+        onChangeText={setDistanciaKm}
+        keyboardType="decimal-pad"
+      />
+      <View style={styles.bloqueOpcional}>
+        <View style={styles.row}>
+          <Text style={styles.label}>¿Incluir Medios de Elevación?</Text>
+          <Switch value={incluirElevacion} onValueChange={setIncluirElevacion} />
+        </View>
+      </View>
+      {/* ------------------------------------------ */}
+
       <TouchableOpacity style={styles.calcButton} onPress={handleCalcular} activeOpacity={0.8}>
         <Text style={styles.calcButtonText}>CALCULAR</Text>
       </TouchableOpacity>
@@ -534,6 +578,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
     fontSize: 16,
+    backgroundColor: '#fff',
   },
   opcionesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   opcionBtn: {

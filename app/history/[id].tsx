@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+// Asegúrate de que este tipo coincida con lo que guardamos en cotizar.tsx
 import type { ItemHistorial } from '../cotizar';
 
 const STORAGE_KEY_HISTORIAL = '@cotizador_historial';
@@ -32,57 +33,112 @@ function valorONo(val: string | number | undefined): string {
   return String(val);
 }
 
-function construirMensajeWhatsApp(item: ItemHistorial): string {
+// --- GENERADOR DE TEXTO (SIRVE PARA WHATSAPP Y EMAIL) ---
+function construirMensajeDetallado(item: ItemHistorial): string {
   const d = item.dimensiones;
   const ancho = d?.ancho ?? 0;
   const largo = d?.largo ?? 0;
   const alto = d?.alto ?? 0;
   const pendiente = d?.pendiente ?? 0;
-  const tipoColumna = item.tipoColumna || '—';
-  const tipoViga = item.tipoViga || '—';
+  
+  // Encabezado
+  let msg = `🏗️ *PRESUPUESTO: ${item.nombreProyecto}*\n`;
+  msg += `📅 Fecha: ${formatearFecha(item.fecha)}\n\n`;
 
-  const detalles: string[] = [];
-  if (item.cerramientoLateral || item.cerramientoFrenteFondo) {
-    const partes: string[] = [];
-    if (item.cerramientoLateral) partes.push('laterales');
-    if (item.cerramientoFrenteFondo) partes.push('frente/fondo');
-    detalles.push(`Cerramientos (${partes.join(', ')})`);
+  // 1. Dimensiones y Estructura
+  msg += `📐 *DIMENSIONES Y ESTRUCTURA*\n`;
+  msg += `• Nave: ${ancho}m x ${largo}m (Sup. ${ancho * largo}m²)\n`;
+  msg += `• Altura: ${alto}m | Pendiente: ${pendiente}%\n`;
+  msg += `• Columnas: ${item.tipoColumna || 'No especificado'}\n`;
+  msg += `• Vigas: ${item.tipoViga || 'No especificado'}\n\n`;
+
+  // 2. Cerramientos y Aislaciones
+  msg += `🛡️ *CERRAMIENTOS Y CUBIERTA*\n`;
+  msg += `• *Techo:* Aislación ${item.aislacionTecho ? (item.tipoAislacionTecho || 'Estándar') : 'NO'}\n`;
+
+  if (item.cerramientoLateral) {
+    msg += `• *Laterales:* SÍ (Chapa: ${item.cerramientoLateralChapa || 'Estándar'})\n`;
+    if (item.aislacionLateral) msg += `  - Aislación: ${item.tipoAislacionLateral || 'Estándar'}\n`;
+  } else {
+    msg += `• *Laterales:* NO (Abierto)\n`;
   }
-  if (item.aislacionLateral || item.aislacionFrenteFondo || item.aislacionTecho) {
-    detalles.push('Aislación');
+
+  if (item.cerramientoFrenteFondo) {
+    msg += `• *Frente/Fondo:* SÍ (Chapa: ${item.cerramientoFrenteFondoChapa || 'Estándar'})\n`;
+    if (item.aislacionFrenteFondo) msg += `  - Aislación: ${item.tipoAislacionFrenteFondo || 'Estándar'}\n`;
+  } else {
+    msg += `• *Frente/Fondo:* NO (Abierto)\n`;
   }
-  if (item.portones) detalles.push('Portones');
-  if (item.pisoHormigon) detalles.push('Piso');
+  msg += `\n`;
 
-  const lineaDetalles = detalles.length > 0 ? detalles.join(', ') : 'Estructura base';
+  // 3. Pisos
+  if (item.pisoHormigon) {
+    msg += `🚜 *PISO INDUSTRIAL*\n`;
+    msg += `• Tipo: ${item.tipoHormigon || 'Hormigón'}\n`;
+    msg += `• Espesor: ${item.espesorPiso || '?'} cm\n`;
+    msg += `• Terminación: ${item.terminacionPiso || 'Alisado Mecánico'}\n\n`;
+  } else {
+    msg += `🚜 *PISO:* No incluido (Suelo natural/compactado)\n\n`;
+  }
 
-  return [
-    `🏗️ *PRESUPUESTO:* ${item.nombreProyecto}`,
-    `📏 *Dimensiones:* ${ancho}m x ${largo}m`,
-    `🔼 *Altura:* ${alto}m | *Pendiente:* ${pendiente}%`,
-    `🛠️ *Estructura:* Columnas ${tipoColumna} y Vigas ${tipoViga}`,
-    '',
-    '📝 *Detalles técnicos:*',
-    lineaDetalles,
-    '',
-    `💵 *VALOR TOTAL:* USD ${Number(item.precioFinal).toFixed(2)}`,
-    '⚠️ Este presupuesto tiene una validez de 7 días.',
-    '📧 Generado por Angel - Cotizador Industrial.',
-  ].join('\n');
+  // 4. Accesos
+  if (item.portones) {
+    msg += `🚪 *ACCESOS*\n`;
+    msg += `• Cantidad: ${item.cantidadPortones}\n`;
+    msg += `• Medidas: ${item.portonesAncho}m x ${item.portonesAlto}m\n`;
+    msg += `• Tipo: ${item.portonesTipoApertura || 'Corredizo'}\n`;
+    msg += `• Chapa: ${item.portonesChapa || 'Igual al resto'}\n\n`;
+  }
+
+  // 5. Logística (NUEVO BLOQUE)
+  msg += `🚚 *LOGÍSTICA Y EJECUCIÓN*\n`;
+  if (item.distanciaKm && item.distanciaKm > 0) {
+    msg += `• Ubicación: Obra a ${item.distanciaKm} km de base operativa.\n`;
+    msg += `• Flete: Transporte de materiales y equipos incluido.\n`;
+  } else {
+    msg += `• Flete: A definir según ubicación final.\n`;
+  }
+  
+  if (item.incluirElevacion) {
+    msg += `• Medios de Elevación: ✅ INCLUIDOS (Grúa/Tijera según corresponda).\n\n`;
+  } else {
+    msg += `• Medios de Elevación: ❌ A cargo del cliente.\n\n`;
+  }
+
+  // Cierre
+  msg += `💰 *INVERSIÓN TOTAL: USD ${Number(item.precioFinal).toFixed(2)}*\n`;
+  msg += `⚠️ _Presupuesto válido por 7 días._\n`;
+  msg += `Atte: *Carmon Cotizador*`;
+
+  return msg;
 }
 
+// --- FUNCIÓN WHATSAPP ---
 async function enviarPorWhatsApp(item: ItemHistorial): Promise<void> {
-  const mensaje = construirMensajeWhatsApp(item);
-  const url = `whatsapp://send?text=${encodeURIComponent(mensaje)}`;
+  const mensaje = construirMensajeDetallado(item);
+  const url = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
   try {
-    const puedeAbrir = await Linking.canOpenURL(url);
-    if (!puedeAbrir) {
-      Alert.alert('', 'WhatsApp no está instalado en este dispositivo.');
-      return;
-    }
     await Linking.openURL(url);
-  } catch {
-    Alert.alert('', 'WhatsApp no está instalado en este dispositivo.');
+  } catch (error) {
+    Alert.alert('Error', 'No se pudo abrir WhatsApp.');
+  }
+}
+
+// --- FUNCIÓN EMAIL (NUEVA) ---
+async function enviarPorEmail(item: ItemHistorial): Promise<void> {
+  const asunto = `Presupuesto: ${item.nombreProyecto}`;
+  const cuerpo = construirMensajeDetallado(item);
+  const url = `mailto:?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+  
+  try {
+    const supported = await Linking.canOpenURL(url);
+    if (supported) {
+      await Linking.openURL(url);
+    } else {
+      Alert.alert('Error', 'No se encontró una aplicación de correo instalada.');
+    }
+  } catch (error) {
+    Alert.alert('Error', 'No se pudo abrir el correo.');
   }
 }
 
@@ -150,69 +206,39 @@ export default function DetalleCotizacionScreen() {
 
       <View style={styles.bloque}>
         <Text style={styles.seccion}>Tipología</Text>
-        <Text style={styles.linea}>Tipo de columna: {valorONo(item.tipoColumna)}</Text>
-        <Text style={styles.linea}>Tipo de viga: {valorONo(item.tipoViga)}</Text>
+        <Text style={styles.linea}>Columna: {valorONo(item.tipoColumna)}</Text>
+        <Text style={styles.linea}>Viga: {valorONo(item.tipoViga)}</Text>
       </View>
 
       <View style={styles.bloque}>
-        <Text style={styles.seccion}>Cerramientos</Text>
+        <Text style={styles.seccion}>Detalles Constructivos</Text>
         <Text style={styles.linea}>
-          Cerramiento lateral: {item.cerramientoLateral ? 'Sí' : 'No'}
-          {item.cerramientoLateral && item.cerramientoLateralChapa
-            ? ` (Chapa: ${item.cerramientoLateralChapa})`
-            : ''}
+          Lat: {item.cerramientoLateral ? 'SÍ' : 'NO'} 
+          {item.cerramientoLateral && ` (${item.cerramientoLateralChapa})`}
         </Text>
-        {item.cerramientoLateral && (
-          <Text style={styles.linea}>
-            Aislación lateral: {item.aislacionLateral ? 'Sí' : 'No'}
-            {item.aislacionLateral && item.tipoAislacionLateral
-              ? ` (${item.tipoAislacionLateral})`
-              : ''}
-          </Text>
-        )}
         <Text style={styles.linea}>
-          Cerramiento frente/fondo: {item.cerramientoFrenteFondo ? 'Sí' : 'No'}
-          {item.cerramientoFrenteFondo && item.cerramientoFrenteFondoChapa
-            ? ` (Chapa: ${item.cerramientoFrenteFondoChapa})`
-            : ''}
+          Fte/Fondo: {item.cerramientoFrenteFondo ? 'SÍ' : 'NO'}
+          {item.cerramientoFrenteFondo && ` (${item.cerramientoFrenteFondoChapa})`}
         </Text>
-        {item.cerramientoFrenteFondo && (
-          <Text style={styles.linea}>
-            Aislación frente/fondo: {item.aislacionFrenteFondo ? 'Sí' : 'No'}
-            {item.aislacionFrenteFondo && item.tipoAislacionFrenteFondo
-              ? ` (${item.tipoAislacionFrenteFondo})`
-              : ''}
-          </Text>
-        )}
-        <Text style={styles.linea}>Portones: {item.portones ? 'Sí' : 'No'}</Text>
-        {item.portones && (
-          <>
-            <Text style={styles.linea}>  Cantidad: {valorONo(item.cantidadPortones)}</Text>
-            <Text style={styles.linea}>  Configuración: {valorONo(item.configuracionPorton)}</Text>
-            <Text style={styles.linea}>  Ancho: {valorONo(item.portonesAncho)} m</Text>
-            <Text style={styles.linea}>  Alto: {valorONo(item.portonesAlto)} m</Text>
-            <Text style={styles.linea}>  Apertura: {valorONo(item.portonesTipoApertura)}</Text>
-            <Text style={styles.linea}>  Chapa: {valorONo(item.portonesChapa)}</Text>
-          </>
-        )}
         <Text style={styles.linea}>
-          Aislación techo: {item.aislacionTecho ? 'Sí' : 'No'}
-          {item.aislacionTecho && item.tipoAislacionTecho
-            ? ` (${item.tipoAislacionTecho})`
-            : ''}
+          Aisl. Techo: {item.aislacionTecho ? 'SÍ' : 'NO'}
+          {item.aislacionTecho && ` (${item.tipoAislacionTecho})`}
+        </Text>
+        <Text style={styles.linea}>
+          Piso: {item.pisoHormigon ? 'SÍ' : 'NO'}
+          {item.pisoHormigon && ` (${item.tipoHormigon} - ${item.espesorPiso})`}
         </Text>
       </View>
 
+      {/* NUEVA SECCIÓN VISUAL LOGÍSTICA */}
       <View style={styles.bloque}>
-        <Text style={styles.seccion}>Piso</Text>
-        <Text style={styles.linea}>Incluye piso de hormigón: {item.pisoHormigon ? 'Sí' : 'No'}</Text>
-        {item.pisoHormigon && (
-          <>
-            <Text style={styles.linea}>  Tipo: {valorONo(item.tipoHormigon)}</Text>
-            <Text style={styles.linea}>  Espesor: {valorONo(item.espesorPiso)}</Text>
-            <Text style={styles.linea}>  Terminación: {valorONo(item.terminacionPiso)}</Text>
-          </>
-        )}
+        <Text style={styles.seccion}>Logística y Equipos</Text>
+        <Text style={styles.linea}>
+          Distancia: {item.distanciaKm ? `${item.distanciaKm} km` : 'No especificada'}
+        </Text>
+        <Text style={styles.linea}>
+          Medios de Elevación: {item.incluirElevacion ? '✅ INCLUIDOS' : '❌ NO INCLUIDOS'}
+        </Text>
       </View>
 
       <View style={styles.bloquePrecio}>
@@ -220,12 +246,22 @@ export default function DetalleCotizacionScreen() {
         <Text style={styles.precioValor}>USD {item.precioFinal.toFixed(2)}</Text>
       </View>
 
+      {/* BOTÓN WHATSAPP */}
       <TouchableOpacity
         style={styles.whatsappBtn}
         onPress={() => enviarPorWhatsApp(item)}
         activeOpacity={0.8}
       >
         <Text style={styles.whatsappBtnText}>📱 ENVIAR POR WHATSAPP</Text>
+      </TouchableOpacity>
+
+      {/* BOTÓN EMAIL */}
+      <TouchableOpacity
+        style={styles.emailBtn}
+        onPress={() => enviarPorEmail(item)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.emailBtnText}>✉️ ENVIAR POR EMAIL</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.volverBtn} onPress={() => router.back()}>
@@ -272,16 +308,31 @@ const styles = StyleSheet.create({
   },
   precioLabel: { fontSize: 14, color: '#bae6fd', marginBottom: 4, fontWeight: '600' },
   precioValor: { fontSize: 28, fontWeight: '700', color: '#fff' },
+  
+  // Estilo WhatsApp
   whatsappBtn: {
     backgroundColor: '#25D366',
     paddingVertical: 16,
     borderRadius: 8,
     alignItems: 'center',
     alignSelf: 'center',
-    minWidth: 280,
+    width: '100%',
     marginBottom: 12,
   },
   whatsappBtnText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+
+  // Estilo Email (NUEVO)
+  emailBtn: {
+    backgroundColor: '#3b82f6', // Azul
+    paddingVertical: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    alignSelf: 'center',
+    width: '100%',
+    marginBottom: 24,
+  },
+  emailBtnText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+
   volverBtn: {
     backgroundColor: '#6b7280',
     paddingVertical: 14,

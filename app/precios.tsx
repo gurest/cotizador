@@ -26,6 +26,7 @@ const defaultPrecios = {
   pinturaTratamiento: '',
   mediosElevacion: '',
   logisticaFletes: '',
+  distanciaKm: '', // <--- NUEVO CAMPO AGREGADO
   viaticos: '',
   margenGanancia: '',
   imprevistosContingencia: '',
@@ -157,6 +158,7 @@ export default function PreciosScreen() {
 
         {/* Grupo 3: Logística y Equipos */}
         <Text style={styles.sectionTitle}>Logística y Equipos</Text>
+        
         <Text style={styles.labelInput}>Medios de Elevación - Grúas/Tijeras (USD Global)</Text>
         <TextInput
           style={styles.input}
@@ -165,14 +167,27 @@ export default function PreciosScreen() {
           onChangeText={(v) => updateCampo('mediosElevacion', v)}
           keyboardType="decimal-pad"
         />
-        <Text style={styles.labelInput}>Logística y Fletes (USD por km o Global)</Text>
+
+        <Text style={styles.labelInput}>Logística y Fletes (USD por km)</Text>
         <TextInput
           style={styles.input}
-          placeholder="Logística y Fletes (USD por km o Global)"
+          placeholder="Costo por Kilómetro (USD/km)"
           value={precios.logisticaFletes}
           onChangeText={(v) => updateCampo('logisticaFletes', v)}
           keyboardType="decimal-pad"
         />
+
+        {/* --- NUEVO CAMPO: Distancia --- */}
+        <Text style={styles.labelInput}>Distancia a la Obra (km)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Distancia total ida y vuelta (km)"
+          value={precios.distanciaKm}
+          onChangeText={(v) => updateCampo('distanciaKm', v)}
+          keyboardType="decimal-pad"
+        />
+        {/* ------------------------------- */}
+
         <Text style={styles.labelInput}>Viáticos - Comida/Alojamiento cuadrilla (USD Global)</Text>
         <TextInput
           style={styles.input}
