@@ -2,7 +2,9 @@ import {
   calcularPresupuesto,
   type ConfigPrecios,
   type DatosCotizacion,
+  type MaterialReticulado,
   type TipoColumna,
+  type TipoHormigon,
   type TipoViga,
 } from '@/utils/calculator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,113 +24,86 @@ import {
 const STORAGE_KEY_PRECIOS = '@cotizador_precios';
 const STORAGE_KEY_HISTORIAL = '@cotizador_historial';
 
-// --- DEFINICIÓN DE TIPOS PARA EL HISTORIAL ---
-export type ItemHistorial = {
-  id: number;
-  nombreProyecto: string;
-  fecha: string;
-  dimensiones: { ancho: number; largo: number; alto: number; pendiente?: number };
-  precioFinal: number;
-  // Estructura
-  tipoColumna?: string;
-  subTipoColumna?: string;
-  medidaColumna?: string;
-  tipoViga?: string;
-  subTipoViga?: string;
-  medidaViga?: string;
-  // Cerramientos
-  cerramientoLateral?: boolean;
-  cerramientoLateralChapa?: string;
-  aislacionLateral?: boolean;
-  tipoAislacionLateral?: string;
-  cerramientoFrenteFondo?: boolean;
-  cerramientoFrenteFondoChapa?: string;
-  aislacionFrenteFondo?: boolean;
-  tipoAislacionFrenteFondo?: string;
-  // Accesos
-  portones?: boolean;
-  cantidadPortones?: number;
-  configuracionPorton?: string;
-  portonesAncho?: number;
-  portonesAlto?: number;
-  portonesTipoApertura?: string;
-  portonesChapa?: string;
-  puertasAuxiliares?: boolean;
-  cantidadPuertasAuxiliares?: number;
-  // Techo
-  aislacionTecho?: boolean;
-  tipoAislacionTecho?: string;
-  chapasTraslucidas?: boolean;
-  cantidadChapasTraslucidas?: number;
-  ventilacionEolica?: boolean;
-  cantidadEolicos?: number;
-  // Piso
-  pisoHormigon?: boolean;
-  tipoHormigon?: string;
-  espesorPiso?: string;
-  terminacionPiso?: string;
-  estudioSuelo?: boolean;
-  hormigonEntrada?: boolean;
-  distanciaEntrada?: number;
-  // Logística
-  distanciaKm?: number;
-  incluirElevacion?: boolean;
-};
+// --- CONSTANTES Y LISTAS DE OPCIONES ---
 
-const configPreciosPorDefecto: ConfigPrecios = {
-  precioAcero: 1.5,
-  precioChapa: 12,
-  precioAislacion: 8,
-  tornilleriaFijaciones: 500,
-  selladoresZingueria: 2,
-  manoObraFabricacion: 3,
-  montajeEstructura: 15,
-  ingenieriaPlanos: 800,
-  pinturaTratamiento: 5,
-  mediosElevacion: 600,
-  logisticaFletes: 4,
-  viaticos: 300,
-  margenGanancia: 15,
-  imprevistosContingencia: 5,
-};
+const OPCIONES_COLUMNA = ['Alma llena', 'Reticulado', 'Tubo', 'Perfil C'] as const;
+const OPCIONES_VIGA = ['Alma llena', 'Reticulado', 'Perfil C'] as const;
 
-// --- CONSTANTES Y OPCIONES ---
-const OPCIONES_COLUMNA = ['Alma llena', 'Reticulado', 'Tubo'] as const;
-const OPCIONES_VIGA = ['Alma llena', 'Reticulado'] as const;
-
-// Subtipos y Medidas
 const OPCIONES_SUBTIPO_PERFIL = ['IPN', 'W'] as const;
-const MEDIDAS_IPN = ['IPN 200', 'IPN 240', 'IPN 300', 'IPN 340', 'IPN 400'] as const;
-const MEDIDAS_W = ['W 200', 'W 250', 'W 310', 'W 360', 'W 410'] as const;
-const MEDIDAS_RETICULADO = ['300 mm', '400 mm', '500 mm', '600 mm', '800 mm'] as const;
-const MEDIDAS_TUBO = ['100x100', '120x120', '140x140', '160x160', '200x200'] as const;
+const MATERIALES_RETICULADO = ['Angulo', 'Hierro Redondo', 'Perfil C'] as const;
+
+// Listas de Medidas
+const MEDIDAS_IPN = [
+  'IPN 200',
+  'IPN 240',
+  'IPN 300',
+  'IPN 340',
+  'IPN 400',
+  'IPN 450',
+  'IPN 500',
+] as const;
+
+const MEDIDAS_W = [
+  'W 200',
+  'W 250',
+  'W 310',
+  'W 360',
+  'W 410',
+  'W 460',
+] as const;
+
+const MEDIDAS_RETICULADO = [
+  '300 mm',
+  '400 mm',
+  '500 mm',
+  '600 mm',
+  '800 mm',
+  '1000 mm',
+] as const;
+
+const MEDIDAS_TUBO = [
+  '100x100',
+  '120x120',
+  '140x140',
+  '160x160',
+  '180x180',
+  '200x200',
+  '220x220',
+  '260x260',
+] as const;
+
+const MEDIDAS_PERFIL_C = [
+  'C 80',
+  'C 100',
+  'C 120',
+  'C 140',
+  'C 160',
+  'C 180',
+  'C 200',
+  'C 220',
+] as const;
 
 const OPCIONES_CHAPA = ['T-101', 'Sinusoidal', 'Prepintada'] as const;
+
 const OPCIONES_AISLACION = [
-  'Burbuja',
+  'Burbuja 5mm',
+  'Burbuja 10mm',
   'Lana Vidrio',
   'Poliuretano',
   'Panel Ignífugo',
 ] as const;
-const OPCIONES_CONFIG_PORTON = ['Simple', 'Doble'] as const;
-const OPCIONES_APERTURA_PORTON = ['Corredizo', 'De abrir'] as const;
+
 const OPCIONES_TIPO_HORMIGON = ['H21 (Liviano)', 'H30 (Industrial)'] as const;
-const OPCIONES_ESPESOR_PISO = ['12 cm', '15 cm', '18 cm'] as const;
+const OPCIONES_ESPESOR_PISO = ['12 cm', '15 cm', '18 cm', '20 cm'] as const;
 const OPCIONES_TERMINACION = [
-  'Llaneado',
-  'Cuarzo',
+  'Llaneado Mecánico',
+  'Rodillado',
   'Sin terminación',
 ] as const;
 
-type TipoChapa = (typeof OPCIONES_CHAPA)[number];
-type TipoAislacion = (typeof OPCIONES_AISLACION)[number];
-type ConfigPorton = (typeof OPCIONES_CONFIG_PORTON)[number];
-type AperturaPorton = (typeof OPCIONES_APERTURA_PORTON)[number];
-type TipoHormigon = (typeof OPCIONES_TIPO_HORMIGON)[number];
-type EspesorPiso = (typeof OPCIONES_ESPESOR_PISO)[number];
-type TerminacionPiso = (typeof OPCIONES_TERMINACION)[number];
 
-// --- COMPONENTE SELECTOR REUTILIZABLE (Estilo Dark/Orange) ---
+// --- COMPONENTES AUXILIARES ---
+
 function SelectorOpciones<T extends string>({
   opciones,
   valor,
@@ -136,7 +111,7 @@ function SelectorOpciones<T extends string>({
   style,
 }: {
   opciones: readonly T[];
-  valor: T | '';
+  valor: string;
   onSeleccionar: (v: T) => void;
   style?: object;
 }) {
@@ -150,7 +125,12 @@ function SelectorOpciones<T extends string>({
             style={[styles.opcionBtn, isActive && styles.opcionBtnActivo]}
             onPress={() => onSeleccionar(op)}
           >
-            <Text style={[styles.opcionBtnText, isActive && styles.opcionBtnTextActivo]}>
+            <Text
+              style={[
+                styles.opcionBtnText,
+                isActive && styles.opcionBtnTextActivo,
+              ]}
+            >
               {op}
             </Text>
           </TouchableOpacity>
@@ -160,7 +140,7 @@ function SelectorOpciones<T extends string>({
   );
 }
 
-// --- COMPONENTE BLOQUE CERRAMIENTO ---
+// Función separada para el bloque de cerramiento
 function BloqueOpcionalCerramiento({
   titulo,
   activo,
@@ -176,16 +156,17 @@ function BloqueOpcionalCerramiento({
   titulo: string;
   activo: boolean;
   onActivoChange: (v: boolean) => void;
-  chapa: TipoChapa | '';
-  onChapaChange: (v: TipoChapa) => void;
+  chapa: string;
+  onChapaChange: (v: any) => void;
   aislacionActiva?: boolean;
   onAislacionActivaChange?: (v: boolean) => void;
-  tipoAislacion?: TipoAislacion | '';
-  onTipoAislacionChange?: (v: TipoAislacion) => void;
+  tipoAislacion?: string;
+  onTipoAislacionChange?: (v: any) => void;
   labelAislacion?: string;
 }) {
   const conAislacion =
     onAislacionActivaChange !== undefined && onTipoAislacionChange !== undefined;
+
   return (
     <View style={styles.card}>
       <View style={styles.row}>
@@ -197,6 +178,7 @@ function BloqueOpcionalCerramiento({
           onValueChange={onActivoChange}
         />
       </View>
+
       {activo && (
         <View style={styles.subSection}>
           <Text style={styles.subLabel}>Tipo de Chapa</Text>
@@ -205,6 +187,7 @@ function BloqueOpcionalCerramiento({
             valor={chapa}
             onSeleccionar={onChapaChange}
           />
+
           {conAislacion && labelAislacion && (
             <>
               <View style={[styles.row, { marginTop: 12 }]}>
@@ -216,6 +199,7 @@ function BloqueOpcionalCerramiento({
                   onValueChange={onAislacionActivaChange}
                 />
               </View>
+
               {aislacionActiva && (
                 <View style={{ marginTop: 8 }}>
                   <SelectorOpciones
@@ -233,64 +217,70 @@ function BloqueOpcionalCerramiento({
   );
 }
 
+
 // --- PANTALLA PRINCIPAL ---
+
 export default function CotizarScreen() {
+  // --- ESTADOS (VARIABLES) ---
   const [nombreProyecto, setNombreProyecto] = useState('');
   
   // Dimensiones
   const [ancho, setAncho] = useState('');
   const [largo, setLargo] = useState('');
   const [altoHombrera, setAltoHombrera] = useState('');
-  const [pendiente, setPendiente] = useState('');
+  const [pendiente, setPendiente] = useState('15');
   
-  // Resultado
+  // Resultado del cálculo
   const [resultadoCalculo, setResultadoCalculo] = useState<number | null>(null);
+  const [desgloseCompleto, setDesgloseCompleto] = useState<any>(null);
 
-  // Estructura
-  const [tipoColumna, setTipoColumna] = useState<(typeof OPCIONES_COLUMNA)[number] | ''>('');
-  const [subTipoColumna, setSubTipoColumna] = useState<'IPN' | 'W' | ''>('');
+  // Estructura Columnas
+  const [tipoColumna, setTipoColumna] = useState<TipoColumna>('Alma llena');
+  const [subTipoColumna, setSubTipoColumna] = useState<'IPN' | 'W'>('IPN');
   const [medidaColumna, setMedidaColumna] = useState('');
+  const [matReticuladoCol, setMatReticuladoCol] = useState<MaterialReticulado>('Angulo');
 
-  const [tipoViga, setTipoViga] = useState<(typeof OPCIONES_VIGA)[number] | ''>('');
-  const [subTipoViga, setSubTipoViga] = useState<'IPN' | 'W' | ''>('');
+  // Estructura Vigas
+  const [tipoViga, setTipoViga] = useState<TipoViga>('Alma llena');
+  const [subTipoViga, setSubTipoViga] = useState<'IPN' | 'W'>('IPN');
   const [medidaViga, setMedidaViga] = useState('');
+  const [matReticuladoViga, setMatReticuladoViga] = useState<MaterialReticulado>('Angulo');
 
   // Cerramientos
   const [cerramientoLateral, setCerramientoLateral] = useState(false);
-  const [cerramientoLateralChapa, setCerramientoLateralChapa] = useState<TipoChapa | ''>('');
+  const [cerramientoLateralChapa, setCerramientoLateralChapa] = useState('T-101');
   const [aislacionLateral, setAislacionLateral] = useState(false);
-  const [tipoAislacionLateral, setTipoAislacionLateral] = useState<TipoAislacion | ''>('');
+  const [tipoAislacionLateral, setTipoAislacionLateral] = useState('Burbuja 10mm');
   
   const [cerramientoFrenteFondo, setCerramientoFrenteFondo] = useState(false);
-  const [cerramientoFrenteFondoChapa, setCerramientoFrenteFondoChapa] = useState<TipoChapa | ''>('');
+  const [cerramientoFrenteFondoChapa, setCerramientoFrenteFondoChapa] = useState('T-101');
   const [aislacionFrenteFondo, setAislacionFrenteFondo] = useState(false);
-  const [tipoAislacionFrenteFondo, setTipoAislacionFrenteFondo] = useState<TipoAislacion | ''>('');
+  const [tipoAislacionFrenteFondo, setTipoAislacionFrenteFondo] = useState('Burbuja 10mm');
   
   // Accesos
   const [portones, setPortones] = useState(false);
   const [cantidadPortones, setCantidadPortones] = useState('');
-  const [configuracionPorton, setConfiguracionPorton] = useState<ConfigPorton | ''>('');
   const [portonesAncho, setPortonesAncho] = useState('');
   const [portonesAlto, setPortonesAlto] = useState('');
-  const [portonesTipoApertura, setPortonesTipoApertura] = useState<AperturaPorton | ''>('');
-  const [portonesChapa, setPortonesChapa] = useState<TipoChapa | ''>('');
 
   const [puertasAuxiliares, setPuertasAuxiliares] = useState(false);
   const [cantidadPuertasAuxiliares, setCantidadPuertasAuxiliares] = useState('');
 
-  // Techo
+  // Techo y Accesorios
   const [aislacionTecho, setAislacionTecho] = useState(false);
-  const [tipoAislacion, setTipoAislacion] = useState<TipoAislacion | ''>('');
+  const [tipoAislacionTecho, setTipoAislacionTecho] = useState('Burbuja 10mm');
+  
   const [chapasTraslucidas, setChapasTraslucidas] = useState(false);
-  const [cantidadChapasTraslucidas, setCantidadChapasTraslucidas] = useState('');
+  const [cantTraslucidas, setCantTraslucidas] = useState('');
+  
   const [ventilacionEolica, setVentilacionEolica] = useState(false);
-  const [cantidadEolicos, setCantidadEolicos] = useState('');
+  const [cantEolicos, setCantEolicos] = useState('');
 
-  // Piso
+  // Piso de Hormigón
   const [pisoHormigon, setPisoHormigon] = useState(false);
-  const [tipoHormigon, setTipoHormigon] = useState<TipoHormigon | ''>('');
-  const [espesorPiso, setEspesorPiso] = useState<EspesorPiso | ''>('');
-  const [terminacionPiso, setTerminacionPiso] = useState<TerminacionPiso | ''>('');
+  const [tipoHormigon, setTipoHormigon] = useState<TipoHormigon>('H21 (Liviano)');
+  const [espesorPiso, setEspesorPiso] = useState('15 cm');
+  const [terminacionPiso, setTerminacionPiso] = useState('Llaneado Mecánico');
   const [estudioSuelo, setEstudioSuelo] = useState(false);
   const [hormigonEntrada, setHormigonEntrada] = useState(false);
   const [distanciaEntrada, setDistanciaEntrada] = useState('');
@@ -299,111 +289,268 @@ export default function CotizarScreen() {
   const [distanciaKm, setDistanciaKm] = useState('');
   const [incluirElevacion, setIncluirElevacion] = useState(false);
 
-  // --- LÓGICA DE CÁLCULO ---
+
+  // --- LÓGICA DE CÁLCULO (FUSIÓN INTELIGENTE) ---
   const handleCalcular = async () => {
-    let config: ConfigPrecios = { ...configPreciosPorDefecto };
+    
+    // 1. Definimos los PRECIOS DE REFERENCIA (Argentina 2026)
+    const defaults = {
+      // Materiales
+      precioAcero: 3.50,          
+      precioChapa: 18.00,         
+      precioAislacion: 12.00,     
+      precioPanelIgnifugo: 45.00, 
+
+      // Accesorios
+      precioEolico: 150.00,           
+      precioChapaTraslucida: 35.00,   
+      precioPuertaEmergencia: 400.00, 
+      precioEstudioSuelo: 300.00,     
+      precioHormigonH21: 140.00,      
+      precioHormigonH30: 160.00,      
+      precioMallaCima: 8.00,          
+
+      // Mano de Obra y Logística
+      tornilleriaFijaciones: 500.00, 
+      selladoresZingueria: 5.00,     
+      manoObraFabricacion: 1.50,     
+      montajeEstructura: 25.00,      
+      ingenieriaPlanos: 600.00,      
+      pinturaTratamiento: 4.00,      
+      mediosElevacion: 800.00,       
+      logisticaFletes: 2.50,         
+      viaticos: 300.00,              
+
+      // Márgenes
+      margenGanancia: 25,            
+      imprevistosContingencia: 5,    
+    };
+
+    // Pesos Específicos (Estos siempre son fijos si no se configuran)
+    const pesosDefault = {
+      pesosIPN: { 'IPN 200': 26.2, 'IPN 240': 36.2, 'IPN 300': 54.2, 'IPN 340': 68, 'IPN 400': 92.4, 'IPN 450': 115, 'IPN 500': 141 },
+      pesosW: { 'W 200': 30, 'W 250': 40, 'W 310': 50, 'W 360': 60, 'W 410': 70, 'W 460': 80 },
+      pesosTubo: { '100x100': 12, '120x120': 15, '140x140': 18, '160x160': 22, '180x180': 25, '200x200': 30, '220x220': 35, '260x260': 45 },
+      pesosPerfilC: { 'C 80': 6, 'C 100': 7.5, 'C 120': 9, 'C 140': 11, 'C 160': 13, 'C 180': 15, 'C 200': 17, 'C 220': 20 },
+      pesosReticulado: {},
+    };
+
+    let config: ConfigPrecios;
+
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY_PRECIOS);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Record<string, string>;
-        // Mapeo seguro de configuración
-        config = {
-            ...configPreciosPorDefecto,
-            ...Object.fromEntries(
-                Object.entries(parsed).map(([k, v]) => [k, parseFloat(v) || 0])
-            )
-        } as ConfigPrecios;
+      const userConfig = stored ? JSON.parse(stored) : {};
+
+      // 2. LÓGICA DE FUSIÓN:
+      // Si el usuario tiene un valor mayor a 0, usamos el suyo.
+      // Si tiene 0, null o no existe, usamos el DEFAULT.
+      
+      const u = (val: any, def: number) => (val && parseFloat(val) > 0 ? parseFloat(val) : def);
+
+      config = {
+        precioAcero: u(userConfig.precioAcero, defaults.precioAcero),
+        precioChapa: u(userConfig.precioChapa, defaults.precioChapa),
+        precioAislacion: u(userConfig.precioAislacion, defaults.precioAislacion),
+        precioPanelIgnifugo: u(userConfig.precioPanelIgnifugo, defaults.precioPanelIgnifugo),
+        
+        precioEolico: u(userConfig.precioEolico, defaults.precioEolico),
+        precioChapaTraslucida: u(userConfig.precioChapaTraslucida, defaults.precioChapaTraslucida),
+        precioPuertaEmergencia: u(userConfig.precioPuertaEmergencia, defaults.precioPuertaEmergencia),
+        precioEstudioSuelo: u(userConfig.precioEstudioSuelo, defaults.precioEstudioSuelo),
+        precioHormigonH21: u(userConfig.precioHormigonH21, defaults.precioHormigonH21),
+        precioHormigonH30: u(userConfig.precioHormigonH30, defaults.precioHormigonH30),
+        precioMallaCima: u(userConfig.precioMallaCima, defaults.precioMallaCima),
+
+        tornilleriaFijaciones: u(userConfig.tornilleriaFijaciones, defaults.tornilleriaFijaciones),
+        selladoresZingueria: u(userConfig.selladoresZingueria, defaults.selladoresZingueria),
+        manoObraFabricacion: u(userConfig.manoObraFabricacion, defaults.manoObraFabricacion),
+        montajeEstructura: u(userConfig.montajeEstructura, defaults.montajeEstructura),
+        ingenieriaPlanos: u(userConfig.ingenieriaPlanos, defaults.ingenieriaPlanos),
+        pinturaTratamiento: u(userConfig.pinturaTratamiento, defaults.pinturaTratamiento),
+        mediosElevacion: u(userConfig.mediosElevacion, defaults.mediosElevacion),
+        logisticaFletes: u(userConfig.logisticaFletes, defaults.logisticaFletes),
+        viaticos: u(userConfig.viaticos, defaults.viaticos),
+
+        margenGanancia: u(userConfig.margenGanancia, defaults.margenGanancia),
+        imprevistosContingencia: u(userConfig.imprevistosContingencia, defaults.imprevistosContingencia),
+
+        // Objetos complejos (Tablas de peso)
+        pesosIPN: userConfig.pesosIPN || pesosDefault.pesosIPN,
+        pesosW: userConfig.pesosW || pesosDefault.pesosW,
+        pesosTubo: userConfig.pesosTubo || pesosDefault.pesosTubo,
+        pesosPerfilC: userConfig.pesosPerfilC || pesosDefault.pesosPerfilC,
+        pesosReticulado: userConfig.pesosReticulado || pesosDefault.pesosReticulado,
+      };
+
+      // Aviso si estamos usando defaults (Opcional, para saber que pasó)
+      if (!stored) {
+         Alert.alert('Aviso', 'Usando precios de referencia global.');
       }
+
     } catch {
-      // Usa default
+      Alert.alert('Error', 'Fallo al cargar precios. Usando referencia.');
+      // En caso de error total, forzamos defaults
+      config = { ...defaults, ...pesosDefault } as any; 
     }
 
+    // Armado del objeto de datos explícito
     const datos: DatosCotizacion = {
       ancho: parseFloat(ancho) || 0,
       largo: parseFloat(largo) || 0,
       altoHombrera: parseFloat(altoHombrera) || 0,
       pendiente: parseFloat(pendiente) || 0,
-      tipoColumna: (tipoColumna || 'Alma llena') as TipoColumna,
-      tipoViga: (tipoViga || 'Alma llena') as TipoViga,
-      cerramientoLateral,
-      cerramientoFrenteFondo,
-      portones,
-      cantidadPortones: parseInt(cantidadPortones, 10) || 0,
+      
+      tipoColumna: tipoColumna,
+      subTipoColumna: tipoColumna === 'Alma llena' ? subTipoColumna : undefined,
+      medidaColumna: medidaColumna,
+      materialReticuladoColumna: tipoColumna === 'Reticulado' ? matReticuladoCol : undefined,
+
+      tipoViga: tipoViga,
+      subTipoViga: tipoViga === 'Alma llena' ? subTipoViga : undefined,
+      medidaViga: medidaViga,
+      materialReticuladoViga: tipoViga === 'Reticulado' ? matReticuladoViga : undefined,
+
+      cerramientoLateral: cerramientoLateral,
+      cerramientoLateralChapa: cerramientoLateralChapa,
+      aislacionLateral: aislacionLateral,
+      tipoAislacionLateral: tipoAislacionLateral,
+
+      cerramientoFrenteFondo: cerramientoFrenteFondo,
+      cerramientoFrenteFondoChapa: cerramientoFrenteFondoChapa,
+      aislacionFrenteFondo: aislacionFrenteFondo,
+      tipoAislacionFrenteFondo: tipoAislacionFrenteFondo,
+      
+      portones: portones,
+      cantidadPortones: parseInt(cantidadPortones) || 0,
       portonesAncho: parseFloat(portonesAncho) || 0,
       portonesAlto: parseFloat(portonesAlto) || 0,
-      aislacionTecho,
-      aislacionLateral,
-      aislacionFrenteFondo,
+      
+      puertasAuxiliares: puertasAuxiliares,
+      cantidadPuertasAuxiliares: parseInt(cantidadPuertasAuxiliares) || 0,
+
+      aislacionTecho: aislacionTecho,
+      tipoAislacionTecho: tipoAislacionTecho,
+
+      chapasTraslucidas: chapasTraslucidas,
+      cantidadChapasTraslucidas: parseInt(cantTraslucidas) || 0,
+      
+      ventilacionEolica: ventilacionEolica,
+      cantidadEolicos: parseInt(cantEolicos) || 0,
+
+      pisoHormigon: pisoHormigon,
+      tipoHormigon: tipoHormigon,
+      espesorPiso: espesorPiso,
+      estudioSuelo: estudioSuelo,
+      hormigonEntrada: hormigonEntrada,
+      distanciaEntrada: parseFloat(distanciaEntrada) || 0,
+      terminacionPiso: terminacionPiso,
+
+      distanciaKm: parseFloat(distanciaKm) || 0,
+      incluirElevacion: incluirElevacion,
     };
 
-    const resultadoBase = calcularPresupuesto(datos, config);
-    let totalCalculado = resultadoBase.total;
-
-    // Adicionales
-    const km = parseFloat(distanciaKm) || 0;
-    if (km > 0) totalCalculado += km * config.logisticaFletes;
-    if (incluirElevacion) totalCalculado += config.mediosElevacion;
-
-    // NOTA: Aquí agregarías lógica extra para cobrar eólicos o puertas si tuvieras precios unitarios definidos en config.
-    // Por ahora, se suman al desglose base si se implementa en 'calculator.ts'.
-
-    setResultadoCalculo(totalCalculado);
+    const res = calcularPresupuesto(datos, config);
+    setResultadoCalculo(res.total);
+    setDesgloseCompleto({
+      ...res,
+      datosInput: datos,
+      fecha: new Date().toISOString()
+    });
   };
 
+
+  // --- GUARDADO DE HISTORIAL (MANUAL EXTENDIDO) ---
+  
   const handleGuardarHistorial = async () => {
-    if (resultadoCalculo === null) return;
-    const item: ItemHistorial = {
+    if (resultadoCalculo === null || !desgloseCompleto) return;
+
+    // Construcción explícita del objeto para guardar, sin simplificaciones (...)
+    const itemParaGuardar = {
       id: Date.now(),
       nombreProyecto: nombreProyecto.trim() || 'Proyecto Sin Nombre',
-      fecha: new Date().toISOString(),
-      dimensiones: {
-        ancho: parseFloat(ancho) || 0,
-        largo: parseFloat(largo) || 0,
-        alto: parseFloat(altoHombrera) || 0,
-        pendiente: parseFloat(pendiente) || 0,
-      },
-      precioFinal: resultadoCalculo,
-      tipoColumna: tipoColumna || undefined,
-      subTipoColumna: subTipoColumna || undefined,
-      medidaColumna: medidaColumna || undefined,
-      tipoViga: tipoViga || undefined,
-      subTipoViga: subTipoViga || undefined,
-      medidaViga: medidaViga || undefined,
-      cerramientoLateral, cerramientoLateralChapa: cerramientoLateralChapa || undefined, aislacionLateral, tipoAislacionLateral: tipoAislacionLateral || undefined,
-      cerramientoFrenteFondo, cerramientoFrenteFondoChapa: cerramientoFrenteFondoChapa || undefined, aislacionFrenteFondo, tipoAislacionFrenteFondo: tipoAislacionFrenteFondo || undefined,
-      portones, cantidadPortones: parseInt(cantidadPortones, 10) || undefined, configuracionPorton: configuracionPorton || undefined, portonesAncho: parseFloat(portonesAncho) || undefined, portonesAlto: parseFloat(portonesAlto) || undefined, portonesTipoApertura: portonesTipoApertura || undefined, portonesChapa: portonesChapa || undefined,
-      puertasAuxiliares, cantidadPuertasAuxiliares: parseInt(cantidadPuertasAuxiliares, 10) || undefined,
-      aislacionTecho, tipoAislacionTecho: tipoAislacion || undefined,
-      chapasTraslucidas, cantidadChapasTraslucidas: parseInt(cantidadChapasTraslucidas, 10) || undefined,
-      ventilacionEolica, cantidadEolicos: parseInt(cantidadEolicos, 10) || undefined,
-      pisoHormigon, tipoHormigon: tipoHormigon || undefined, espesorPiso: espesorPiso || undefined, terminacionPiso: terminacionPiso || undefined,
-      estudioSuelo, hormigonEntrada, distanciaEntrada: parseFloat(distanciaEntrada) || undefined,
-      distanciaKm: parseFloat(distanciaKm) || 0, incluirElevacion,
+      fecha: desgloseCompleto.fecha,
+      total: desgloseCompleto.total,
+      subtotal: desgloseCompleto.subtotal,
+      desglose: desgloseCompleto.desglose,
+      datosInput: {
+        ancho: desgloseCompleto.datosInput.ancho,
+        largo: desgloseCompleto.datosInput.largo,
+        altoHombrera: desgloseCompleto.datosInput.altoHombrera,
+        pendiente: desgloseCompleto.datosInput.pendiente,
+        
+        tipoColumna: desgloseCompleto.datosInput.tipoColumna,
+        subTipoColumna: desgloseCompleto.datosInput.subTipoColumna,
+        medidaColumna: desgloseCompleto.datosInput.medidaColumna,
+        materialReticuladoColumna: desgloseCompleto.datosInput.materialReticuladoColumna,
+
+        tipoViga: desgloseCompleto.datosInput.tipoViga,
+        subTipoViga: desgloseCompleto.datosInput.subTipoViga,
+        medidaViga: desgloseCompleto.datosInput.medidaViga,
+        materialReticuladoViga: desgloseCompleto.datosInput.materialReticuladoViga,
+
+        cerramientoLateral: desgloseCompleto.datosInput.cerramientoLateral,
+        cerramientoLateralChapa: desgloseCompleto.datosInput.cerramientoLateralChapa,
+        aislacionLateral: desgloseCompleto.datosInput.aislacionLateral,
+        tipoAislacionLateral: desgloseCompleto.datosInput.tipoAislacionLateral,
+
+        cerramientoFrenteFondo: desgloseCompleto.datosInput.cerramientoFrenteFondo,
+        cerramientoFrenteFondoChapa: desgloseCompleto.datosInput.cerramientoFrenteFondoChapa,
+        aislacionFrenteFondo: desgloseCompleto.datosInput.aislacionFrenteFondo,
+        tipoAislacionFrenteFondo: desgloseCompleto.datosInput.tipoAislacionFrenteFondo,
+
+        portones: desgloseCompleto.datosInput.portones,
+        cantidadPortones: desgloseCompleto.datosInput.cantidadPortones,
+        portonesAncho: desgloseCompleto.datosInput.portonesAncho,
+        portonesAlto: desgloseCompleto.datosInput.portonesAlto,
+
+        puertasAuxiliares: desgloseCompleto.datosInput.puertasAuxiliares,
+        cantidadPuertasAuxiliares: desgloseCompleto.datosInput.cantidadPuertasAuxiliares,
+
+        aislacionTecho: desgloseCompleto.datosInput.aislacionTecho,
+        tipoAislacionTecho: desgloseCompleto.datosInput.tipoAislacionTecho,
+
+        chapasTraslucidas: desgloseCompleto.datosInput.chapasTraslucidas,
+        cantidadChapasTraslucidas: desgloseCompleto.datosInput.cantidadChapasTraslucidas,
+
+        ventilacionEolica: desgloseCompleto.datosInput.ventilacionEolica,
+        cantidadEolicos: desgloseCompleto.datosInput.cantidadEolicos,
+
+        pisoHormigon: desgloseCompleto.datosInput.pisoHormigon,
+        tipoHormigon: desgloseCompleto.datosInput.tipoHormigon,
+        espesorPiso: desgloseCompleto.datosInput.espesorPiso,
+        estudioSuelo: desgloseCompleto.datosInput.estudioSuelo,
+        hormigonEntrada: desgloseCompleto.datosInput.hormigonEntrada,
+        distanciaEntrada: desgloseCompleto.datosInput.distanciaEntrada,
+        terminacionPiso: desgloseCompleto.datosInput.terminacionPiso,
+
+        distanciaKm: desgloseCompleto.datosInput.distanciaKm,
+        incluirElevacion: desgloseCompleto.datosInput.incluirElevacion,
+      }
     };
 
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEY_HISTORIAL);
-      const lista: ItemHistorial[] = raw ? JSON.parse(raw) : [];
-      lista.unshift(item);
+      const lista = raw ? JSON.parse(raw) : [];
+      lista.unshift(itemParaGuardar);
       await AsyncStorage.setItem(STORAGE_KEY_HISTORIAL, JSON.stringify(lista));
       Alert.alert('Guardado', 'Cotización guardada exitosamente.');
     } catch {
-      Alert.alert('Error', 'No se pudo guardar.');
+      Alert.alert('Error', 'No se pudo guardar en el historial.');
     }
   };
+
 
   return (
     <View style={styles.flex}>
       <StatusBar barStyle="light-content" backgroundColor="#121212" />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
         
-        {/* HEADER MARCA */}
         <View style={styles.headerContainer}>
           <Text style={styles.brandTitle}>NUEVA COTIZACIÓN</Text>
-          <Text style={styles.brandSubtitle}>Cotizador Industrial Profesional</Text>
+          <Text style={styles.brandSubtitle}>Quicksheed - Sistema de Cálculo</Text>
         </View>
 
-        {/* NOMBRE PROYECTO */}
+        {/* NOMBRE */}
         <View style={styles.card}>
           <Text style={styles.label}>Nombre del Proyecto</Text>
           <TextInput
@@ -415,95 +562,181 @@ export default function CotizarScreen() {
           />
         </View>
 
-        {/* DIMENSIONES */}
+        {/* 1. DIMENSIONES */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Dimensiones</Text>
+          <Text style={styles.sectionTitle}>1. Dimensiones</Text>
           <View style={styles.rowInputs}>
             <View style={styles.halfInput}>
-                <Text style={styles.subLabel}>Ancho (m)</Text>
-                <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#9ca3af" keyboardType="decimal-pad" value={ancho} onChangeText={setAncho} />
+              <Text style={styles.subLabel}>Ancho (m)</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="0.00"
+                placeholderTextColor="#555"
+                value={ancho}
+                onChangeText={setAncho}
+              />
             </View>
             <View style={styles.halfInput}>
-                <Text style={styles.subLabel}>Largo (m)</Text>
-                <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#9ca3af" keyboardType="decimal-pad" value={largo} onChangeText={setLargo} />
+              <Text style={styles.subLabel}>Largo (m)</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="0.00"
+                placeholderTextColor="#555"
+                value={largo}
+                onChangeText={setLargo}
+              />
             </View>
           </View>
           <View style={styles.rowInputs}>
             <View style={styles.halfInput}>
-                <Text style={styles.subLabel}>Alto Hombrera (m)</Text>
-                <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#9ca3af" keyboardType="decimal-pad" value={altoHombrera} onChangeText={setAltoHombrera} />
+              <Text style={styles.subLabel}>Alto Hombrera (m)</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="0.00"
+                placeholderTextColor="#555"
+                value={altoHombrera}
+                onChangeText={setAltoHombrera}
+              />
             </View>
             <View style={styles.halfInput}>
-                <Text style={styles.subLabel}>Pendiente (%)</Text>
-                <TextInput style={styles.input} placeholder="15" placeholderTextColor="#9ca3af" keyboardType="decimal-pad" value={pendiente} onChangeText={setPendiente} />
+              <Text style={styles.subLabel}>Pendiente (%)</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="15"
+                placeholderTextColor="#555"
+                value={pendiente}
+                onChangeText={setPendiente}
+              />
             </View>
           </View>
         </View>
 
-        {/* ESTRUCTURA */}
+        {/* 2. ESTRUCTURA COLUMNAS */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Estructura</Text>
-          
-          {/* COLUMNAS */}
-          <Text style={styles.subLabel}>Tipo de Columna</Text>
+          <Text style={styles.sectionTitle}>2. Estructura Columnas</Text>
           <SelectorOpciones
             opciones={OPCIONES_COLUMNA}
             valor={tipoColumna}
-            onSeleccionar={(val) => { setTipoColumna(val); setSubTipoColumna(''); setMedidaColumna(''); }}
+            onSeleccionar={(v) => { setTipoColumna(v); setMedidaColumna(''); }}
           />
+
           {tipoColumna === 'Alma llena' && (
             <>
-              <Text style={[styles.subLabel, { marginTop: 8 }]}>Perfil (IPN / W)</Text>
+              <Text style={styles.subLabel}>Subtipo de Perfil</Text>
               <SelectorOpciones
                 opciones={OPCIONES_SUBTIPO_PERFIL}
                 valor={subTipoColumna}
-                onSeleccionar={(val) => { setSubTipoColumna(val as 'IPN' | 'W'); setMedidaColumna(''); }}
+                onSeleccionar={setSubTipoColumna}
               />
-              {subTipoColumna === 'IPN' && <SelectorOpciones style={{ marginTop: 8 }} opciones={MEDIDAS_IPN} valor={medidaColumna} onSeleccionar={setMedidaColumna} />}
-              {subTipoColumna === 'W' && <SelectorOpciones style={{ marginTop: 8 }} opciones={MEDIDAS_W} valor={medidaColumna} onSeleccionar={setMedidaColumna} />}
-            </>
-          )}
-          {tipoColumna === 'Reticulado' && (
-            <>
-              <Text style={[styles.subLabel, { marginTop: 8 }]}>Altura Reticulado</Text>
-              <SelectorOpciones opciones={MEDIDAS_RETICULADO} valor={medidaColumna} onSeleccionar={setMedidaColumna} />
-            </>
-          )}
-          {tipoColumna === 'Tubo' && (
-            <>
-              <Text style={[styles.subLabel, { marginTop: 8 }]}>Medida Tubo</Text>
-              <SelectorOpciones opciones={MEDIDAS_TUBO} valor={medidaColumna} onSeleccionar={setMedidaColumna} />
+              <Text style={styles.subLabel}>Medida</Text>
+              <SelectorOpciones
+                opciones={subTipoColumna === 'IPN' ? MEDIDAS_IPN : MEDIDAS_W}
+                valor={medidaColumna}
+                onSeleccionar={setMedidaColumna}
+              />
             </>
           )}
 
-          {/* VIGAS */}
-          <Text style={[styles.subLabel, { marginTop: 16 }]}>Tipo de Viga</Text>
-          <SelectorOpciones
-            opciones={OPCIONES_VIGA}
-            valor={tipoViga}
-            onSeleccionar={(val) => { setTipoViga(val); setSubTipoViga(''); setMedidaViga(''); }}
-          />
-          {tipoViga === 'Alma llena' && (
+          {tipoColumna === 'Reticulado' && (
             <>
-              <Text style={[styles.subLabel, { marginTop: 8 }]}>Perfil (IPN / W)</Text>
+              <Text style={styles.subLabel}>Material de Relleno</Text>
               <SelectorOpciones
-                opciones={OPCIONES_SUBTIPO_PERFIL}
-                valor={subTipoViga}
-                onSeleccionar={(val) => { setSubTipoViga(val as 'IPN' | 'W'); setMedidaViga(''); }}
+                opciones={MATERIALES_RETICULADO}
+                valor={matReticuladoCol}
+                onSeleccionar={setMatReticuladoCol}
               />
-              {subTipoViga === 'IPN' && <SelectorOpciones style={{ marginTop: 8 }} opciones={MEDIDAS_IPN} valor={medidaViga} onSeleccionar={setMedidaViga} />}
-              {subTipoViga === 'W' && <SelectorOpciones style={{ marginTop: 8 }} opciones={MEDIDAS_W} valor={medidaViga} onSeleccionar={setMedidaViga} />}
+              <Text style={styles.subLabel}>Altura Reticulado</Text>
+              <SelectorOpciones
+                opciones={MEDIDAS_RETICULADO}
+                valor={medidaColumna}
+                onSeleccionar={setMedidaColumna}
+              />
             </>
           )}
-          {tipoViga === 'Reticulado' && (
+
+          {tipoColumna === 'Tubo' && (
             <>
-              <Text style={[styles.subLabel, { marginTop: 8 }]}>Altura Reticulado</Text>
-              <SelectorOpciones opciones={MEDIDAS_RETICULADO} valor={medidaViga} onSeleccionar={setMedidaViga} />
+              <Text style={styles.subLabel}>Medida del Tubo</Text>
+              <SelectorOpciones
+                opciones={MEDIDAS_TUBO}
+                valor={medidaColumna}
+                onSeleccionar={setMedidaColumna}
+              />
+            </>
+          )}
+
+          {tipoColumna === 'Perfil C' && (
+            <>
+              <Text style={styles.subLabel}>Medida Perfil C</Text>
+              <SelectorOpciones
+                opciones={MEDIDAS_PERFIL_C}
+                valor={medidaColumna}
+                onSeleccionar={setMedidaColumna}
+              />
             </>
           )}
         </View>
 
-        {/* CERRAMIENTOS */}
+        {/* 3. ESTRUCTURA VIGAS */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>3. Estructura Vigas</Text>
+          <SelectorOpciones
+            opciones={OPCIONES_VIGA}
+            valor={tipoViga}
+            onSeleccionar={(v) => { setTipoViga(v); setMedidaViga(''); }}
+          />
+
+          {tipoViga === 'Alma llena' && (
+            <>
+              <Text style={styles.subLabel}>Subtipo de Perfil</Text>
+              <SelectorOpciones
+                opciones={OPCIONES_SUBTIPO_PERFIL}
+                valor={subTipoViga}
+                onSeleccionar={setSubTipoViga}
+              />
+              <Text style={styles.subLabel}>Medida</Text>
+              <SelectorOpciones
+                opciones={subTipoViga === 'IPN' ? MEDIDAS_IPN : MEDIDAS_W}
+                valor={medidaViga}
+                onSeleccionar={setMedidaViga}
+              />
+            </>
+          )}
+
+          {tipoViga === 'Reticulado' && (
+            <>
+              <Text style={styles.subLabel}>Material de Relleno</Text>
+              <SelectorOpciones
+                opciones={MATERIALES_RETICULADO}
+                valor={matReticuladoViga}
+                onSeleccionar={setMatReticuladoViga}
+              />
+              <Text style={styles.subLabel}>Altura Reticulado</Text>
+              <SelectorOpciones
+                opciones={MEDIDAS_RETICULADO}
+                valor={medidaViga}
+                onSeleccionar={setMedidaViga}
+              />
+            </>
+          )}
+
+          {tipoViga === 'Perfil C' && (
+            <>
+              <Text style={styles.subLabel}>Medida Perfil C</Text>
+              <SelectorOpciones
+                opciones={MEDIDAS_PERFIL_C}
+                valor={medidaViga}
+                onSeleccionar={setMedidaViga}
+              />
+            </>
+          )}
+        </View>
+
+        {/* 4. CERRAMIENTOS */}
         <BloqueOpcionalCerramiento
           titulo="Cerramiento Lateral"
           activo={cerramientoLateral}
@@ -514,10 +747,11 @@ export default function CotizarScreen() {
           onAislacionActivaChange={setAislacionLateral}
           tipoAislacion={tipoAislacionLateral}
           onTipoAislacionChange={setTipoAislacionLateral}
-          labelAislacion="¿Aislación Lateral?"
+          labelAislacion="¿Incluir Aislación Lateral?"
         />
+
         <BloqueOpcionalCerramiento
-          titulo="Frente y Fondo"
+          titulo="Cerramiento Frente y Fondo"
           activo={cerramientoFrenteFondo}
           onActivoChange={setCerramientoFrenteFondo}
           chapa={cerramientoFrenteFondoChapa}
@@ -526,174 +760,305 @@ export default function CotizarScreen() {
           onAislacionActivaChange={setAislacionFrenteFondo}
           tipoAislacion={tipoAislacionFrenteFondo}
           onTipoAislacionChange={setTipoAislacionFrenteFondo}
-          labelAislacion="¿Aislación Frente/Fondo?"
+          labelAislacion="¿Incluir Aislación Frt/Fnd?"
         />
 
-        {/* ACCESOS (Portones y Puertas) */}
+        {/* 5. ACCESOS */}
         <View style={styles.card}>
+          <Text style={styles.sectionTitle}>5. Accesos</Text>
+          {/* Portones */}
           <View style={styles.row}>
             <Text style={styles.label}>Portones Industriales</Text>
-            <Switch trackColor={{ false: '#3f3f46', true: '#F59E0B' }} thumbColor={portones ? '#fff' : '#f4f3f4'} value={portones} onValueChange={setPortones} />
+            <Switch
+              trackColor={{ false: '#3f3f46', true: '#F59E0B' }}
+              value={portones}
+              onValueChange={setPortones}
+            />
           </View>
           {portones && (
             <View style={styles.subSection}>
               <View style={styles.rowInputs}>
                 <View style={styles.halfInput}>
-                    <Text style={styles.subLabel}>Cantidad</Text>
-                    <TextInput style={styles.input} placeholder="1" placeholderTextColor="#9ca3af" keyboardType="number-pad" value={cantidadPortones} onChangeText={setCantidadPortones} />
+                  <Text style={styles.subLabel}>Cant.</Text>
+                  <TextInput
+                    style={styles.input}
+                    keyboardType="numeric"
+                    value={cantidadPortones}
+                    onChangeText={setCantidadPortones}
+                  />
                 </View>
                 <View style={styles.halfInput}>
-                    <Text style={styles.subLabel}>Ancho (m)</Text>
-                    <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#9ca3af" keyboardType="decimal-pad" value={portonesAncho} onChangeText={setPortonesAncho} />
+                  <Text style={styles.subLabel}>Ancho (m)</Text>
+                  <TextInput
+                    style={styles.input}
+                    keyboardType="numeric"
+                    value={portonesAncho}
+                    onChangeText={setPortonesAncho}
+                  />
                 </View>
-              </View>
-              <View style={styles.rowInputs}>
                 <View style={styles.halfInput}>
-                    <Text style={styles.subLabel}>Alto (m)</Text>
-                    <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#9ca3af" keyboardType="decimal-pad" value={portonesAlto} onChangeText={setPortonesAlto} />
+                  <Text style={styles.subLabel}>Alto (m)</Text>
+                  <TextInput
+                    style={styles.input}
+                    keyboardType="numeric"
+                    value={portonesAlto}
+                    onChangeText={setPortonesAlto}
+                  />
                 </View>
               </View>
-              <Text style={[styles.subLabel, { marginTop: 8 }]}>Configuración</Text>
-              <SelectorOpciones opciones={OPCIONES_CONFIG_PORTON} valor={configuracionPorton} onSeleccionar={setConfiguracionPorton} />
-              <Text style={[styles.subLabel, { marginTop: 8 }]}>Apertura</Text>
-              <SelectorOpciones opciones={OPCIONES_APERTURA_PORTON} valor={portonesTipoApertura} onSeleccionar={setPortonesTipoApertura} />
-              <Text style={[styles.subLabel, { marginTop: 8 }]}>Tipo de Chapa</Text>
-              <SelectorOpciones opciones={OPCIONES_CHAPA} valor={portonesChapa} onSeleccionar={setPortonesChapa} />
+            </View>
+          )}
+
+          <View style={styles.separator} />
+
+          {/* Puertas Aux */}
+          <View style={styles.row}>
+            <Text style={styles.label}>Puertas de Emergencia</Text>
+            <Switch
+              trackColor={{ false: '#3f3f46', true: '#F59E0B' }}
+              value={puertasAuxiliares}
+              onValueChange={setPuertasAuxiliares}
+            />
+          </View>
+          {puertasAuxiliares && (
+            <View style={styles.subSection}>
+              <Text style={styles.subLabel}>Cantidad de Puertas</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                value={cantidadPuertasAuxiliares}
+                onChangeText={setCantidadPuertasAuxiliares}
+              />
+            </View>
+          )}
+        </View>
+
+        {/* 6. TECHOS Y CUBIERTA */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>6. Techo y Cubierta</Text>
+
+          <View style={styles.row}>
+            <Text style={styles.label}>Aislación de Techo</Text>
+            <Switch
+              trackColor={{ false: '#3f3f46', true: '#F59E0B' }}
+              value={aislacionTecho}
+              onValueChange={setAislacionTecho}
+            />
+          </View>
+          {aislacionTecho && (
+            <View style={styles.subSection}>
+              <SelectorOpciones
+                opciones={OPCIONES_AISLACION}
+                valor={tipoAislacionTecho}
+                onSeleccionar={setTipoAislacionTecho}
+              />
             </View>
           )}
 
           <View style={styles.separator} />
 
           <View style={styles.row}>
-            <Text style={styles.label}>Puertas de Emergencia</Text>
-            <Switch trackColor={{ false: '#3f3f46', true: '#F59E0B' }} thumbColor={puertasAuxiliares ? '#fff' : '#f4f3f4'} value={puertasAuxiliares} onValueChange={setPuertasAuxiliares} />
+            <Text style={styles.label}>Chapas Traslúcidas</Text>
+            <Switch
+              trackColor={{ false: '#3f3f46', true: '#F59E0B' }}
+              value={chapasTraslucidas}
+              onValueChange={setChapasTraslucidas}
+            />
           </View>
-          {puertasAuxiliares && (
+          {chapasTraslucidas && (
             <View style={styles.subSection}>
-              <Text style={styles.subLabel}>Cantidad de Puertas</Text>
-              <TextInput style={styles.input} placeholder="2" placeholderTextColor="#9ca3af" keyboardType="number-pad" value={cantidadPuertasAuxiliares} onChangeText={setCantidadPuertasAuxiliares} />
+              <Text style={styles.subLabel}>Cantidad de Chapas</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                value={cantTraslucidas}
+                onChangeText={setCantTraslucidas}
+              />
+            </View>
+          )}
+
+          <View style={styles.separator} />
+
+          <View style={styles.row}>
+            <Text style={styles.label}>Ventilación Eólica</Text>
+            <Switch
+              trackColor={{ false: '#3f3f46', true: '#F59E0B' }}
+              value={ventilacionEolica}
+              onValueChange={setVentilacionEolica}
+            />
+          </View>
+          {ventilacionEolica && (
+            <View style={styles.subSection}>
+              <Text style={styles.subLabel}>Cantidad de Eólicos</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                value={cantEolicos}
+                onChangeText={setCantEolicos}
+              />
             </View>
           )}
         </View>
 
-        {/* EXTRAS TECHO */}
+        {/* 7. PISO */}
         <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Techo y Cubierta</Text>
-            
-            <View style={styles.row}>
-                <Text style={styles.label}>¿Aislación Techo?</Text>
-                <Switch trackColor={{ false: '#3f3f46', true: '#F59E0B' }} thumbColor={aislacionTecho ? '#fff' : '#f4f3f4'} value={aislacionTecho} onValueChange={setAislacionTecho} />
-            </View>
-            {aislacionTecho && (
-                <View style={styles.subSection}>
-                    <SelectorOpciones opciones={OPCIONES_AISLACION} valor={tipoAislacion} onSeleccionar={setTipoAislacion} />
-                </View>
-            )}
-
-            <View style={styles.separator} />
-            
-            <View style={styles.row}>
-                <Text style={styles.label}>¿Chapas Traslúcidas?</Text>
-                <Switch trackColor={{ false: '#3f3f46', true: '#F59E0B' }} thumbColor={chapasTraslucidas ? '#fff' : '#f4f3f4'} value={chapasTraslucidas} onValueChange={setChapasTraslucidas} />
-            </View>
-            {chapasTraslucidas && (
-                <View style={styles.subSection}>
-                    <TextInput style={styles.input} placeholder="Cantidad" placeholderTextColor="#9ca3af" keyboardType="number-pad" value={cantidadChapasTraslucidas} onChangeText={setCantidadChapasTraslucidas} />
-                </View>
-            )}
-
-            <View style={styles.separator} />
-
-            <View style={styles.row}>
-                <Text style={styles.label}>¿Ventilación Eólica?</Text>
-                <Switch trackColor={{ false: '#3f3f46', true: '#F59E0B' }} thumbColor={ventilacionEolica ? '#fff' : '#f4f3f4'} value={ventilacionEolica} onValueChange={setVentilacionEolica} />
-            </View>
-            {ventilacionEolica && (
-                <View style={styles.subSection}>
-                    <TextInput style={styles.input} placeholder="Cantidad de Eólicos" placeholderTextColor="#9ca3af" keyboardType="number-pad" value={cantidadEolicos} onChangeText={setCantidadEolicos} />
-                </View>
-            )}
-        </View>
-
-        {/* PISO */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Piso de Hormigón</Text>
+          <Text style={styles.sectionTitle}>7. Piso de Hormigón</Text>
           <View style={styles.row}>
-            <Text style={styles.label}>¿Incluir Piso?</Text>
-            <Switch trackColor={{ false: '#3f3f46', true: '#F59E0B' }} thumbColor={pisoHormigon ? '#fff' : '#f4f3f4'} value={pisoHormigon} onValueChange={setPisoHormigon} />
+            <Text style={styles.label}>Incluir Piso</Text>
+            <Switch
+              trackColor={{ false: '#3f3f46', true: '#F59E0B' }}
+              value={pisoHormigon}
+              onValueChange={setPisoHormigon}
+            />
           </View>
           {pisoHormigon && (
             <View style={styles.subSection}>
-              <Text style={styles.subLabel}>Tipo</Text>
-              <SelectorOpciones opciones={OPCIONES_TIPO_HORMIGON} valor={tipoHormigon} onSeleccionar={setTipoHormigon} />
-              <Text style={[styles.subLabel, { marginTop: 8 }]}>Espesor</Text>
-              <SelectorOpciones opciones={OPCIONES_ESPESOR_PISO} valor={espesorPiso} onSeleccionar={setEspesorPiso} />
-              <Text style={[styles.subLabel, { marginTop: 8 }]}>Terminación</Text>
-              <SelectorOpciones opciones={OPCIONES_TERMINACION} valor={terminacionPiso} onSeleccionar={setTerminacionPiso} />
-              
-              <View style={[styles.separator, { marginVertical: 12 }]} />
-              
-              <View style={styles.row}>
-                <Text style={styles.labelSmall}>¿Estudio de Suelo?</Text>
-                <Switch trackColor={{ false: '#3f3f46', true: '#F59E0B' }} thumbColor={estudioSuelo ? '#fff' : '#f4f3f4'} value={estudioSuelo} onValueChange={setEstudioSuelo} />
+              <Text style={styles.subLabel}>Tipo de Hormigón</Text>
+              <SelectorOpciones
+                opciones={OPCIONES_TIPO_HORMIGON}
+                valor={tipoHormigon}
+                onSeleccionar={setTipoHormigon}
+              />
+
+              <Text style={[styles.subLabel, { marginTop: 10 }]}>
+                Espesor del Piso
+              </Text>
+              <SelectorOpciones
+                opciones={OPCIONES_ESPESOR_PISO}
+                valor={espesorPiso}
+                onSeleccionar={setEspesorPiso}
+              />
+
+              <Text style={[styles.subLabel, { marginTop: 10 }]}>
+                Terminación
+              </Text>
+              <SelectorOpciones
+                opciones={OPCIONES_TERMINACION}
+                valor={terminacionPiso}
+                onSeleccionar={setTerminacionPiso}
+              />
+
+              <View style={[styles.row, { marginTop: 15 }]}>
+                <Text style={styles.labelSmall}>¿Requiere Estudio de Suelo?</Text>
+                <Switch
+                  trackColor={{ false: '#3f3f46', true: '#F59E0B' }}
+                  value={estudioSuelo}
+                  onValueChange={setEstudioSuelo}
+                />
               </View>
 
-              <View style={[styles.row, { marginTop: 8 }]}>
+              <View style={[styles.row, { marginTop: 10 }]}>
                 <Text style={styles.labelSmall}>¿Hormigón hasta la calle?</Text>
-                <Switch trackColor={{ false: '#3f3f46', true: '#F59E0B' }} thumbColor={hormigonEntrada ? '#fff' : '#f4f3f4'} value={hormigonEntrada} onValueChange={setHormigonEntrada} />
+                <Switch
+                  trackColor={{ false: '#3f3f46', true: '#F59E0B' }}
+                  value={hormigonEntrada}
+                  onValueChange={setHormigonEntrada}
+                />
               </View>
               {hormigonEntrada && (
-                  <TextInput style={[styles.input, { marginTop: 8 }]} placeholder="Distancia Portón a Calle (m)" placeholderTextColor="#9ca3af" keyboardType="decimal-pad" value={distanciaEntrada} onChangeText={setDistanciaEntrada} />
+                <TextInput
+                  style={[styles.input, { marginTop: 8 }]}
+                  placeholder="Distancia (m)"
+                  placeholderTextColor="#555"
+                  keyboardType="numeric"
+                  value={distanciaEntrada}
+                  onChangeText={setDistanciaEntrada}
+                />
               )}
             </View>
           )}
         </View>
 
-        {/* LOGÍSTICA */}
+        {/* 8. LOGÍSTICA */}
         <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Logística y Equipos</Text>
-            <Text style={styles.subLabel}>Distancia Obra (km ida y vuelta)</Text>
-            <TextInput style={styles.input} placeholder="0" placeholderTextColor="#9ca3af" keyboardType="decimal-pad" value={distanciaKm} onChangeText={setDistanciaKm} />
-            
-            <View style={[styles.row, { marginTop: 12 }]}>
-                <Text style={styles.label}>¿Medios de Elevación?</Text>
-                <Switch trackColor={{ false: '#3f3f46', true: '#F59E0B' }} thumbColor={incluirElevacion ? '#fff' : '#f4f3f4'} value={incluirElevacion} onValueChange={setIncluirElevacion} />
-            </View>
+          <Text style={styles.sectionTitle}>8. Logística y Equipos</Text>
+          <Text style={styles.subLabel}>Distancia de la Obra (km total)</Text>
+          <TextInput
+            style={styles.input}
+            keyboardType="numeric"
+            placeholder="0"
+            placeholderTextColor="#555"
+            value={distanciaKm}
+            onChangeText={setDistanciaKm}
+          />
+
+          <View style={[styles.row, { marginTop: 15 }]}>
+            <Text style={styles.label}>¿Incluir Medios de Elevación?</Text>
+            <Switch
+              trackColor={{ false: '#3f3f46', true: '#F59E0B' }}
+              value={incluirElevacion}
+              onValueChange={setIncluirElevacion}
+            />
+          </View>
         </View>
 
-        {/* BOTÓN CALCULAR */}
-        <TouchableOpacity style={styles.calcButton} onPress={handleCalcular} activeOpacity={0.8}>
+        {/* BOTONES DE ACCIÓN */}
+        <TouchableOpacity
+          style={styles.calcButton}
+          onPress={handleCalcular}
+          activeOpacity={0.8}
+        >
           <Text style={styles.calcButtonText}>CALCULAR PRESUPUESTO</Text>
         </TouchableOpacity>
 
-        {/* RESULTADO */}
-        {resultadoCalculo !== null && (
+        {resultadoCalculo !== null && desgloseCompleto && (
           <View style={styles.resultadoBox}>
-            <Text style={styles.resultadoLabel}>VALOR FINAL ESTIMADO</Text>
-            <Text style={styles.resultadoPrecio}>USD {resultadoCalculo.toFixed(2)}</Text>
-            <TouchableOpacity style={styles.guardarButton} onPress={handleGuardarHistorial} activeOpacity={0.8}>
+            <Text style={styles.resultadoLabel}>VALOR TOTAL ESTIMADO</Text>
+            <Text style={styles.resultadoPrecio}>
+              USD {resultadoCalculo.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Text>
+
+            <View style={styles.desgloseContainer}>
+               <Text style={styles.desgloseItem}>
+                 Materiales: USD {desgloseCompleto.desglose.materialesEstructura.toLocaleString('es-AR', {minimumFractionDigits: 2})}
+               </Text>
+               <Text style={styles.desgloseItem}>
+                 Cubiertas: USD {desgloseCompleto.desglose.cubiertasYAislaciones.toLocaleString('es-AR', {minimumFractionDigits: 2})}
+               </Text>
+               <Text style={styles.desgloseItem}>
+                 Accesorios: USD {desgloseCompleto.desglose.accesorios.toLocaleString('es-AR', {minimumFractionDigits: 2})}
+               </Text>
+               <Text style={styles.desgloseItem}>
+                 Obra Civil: USD {desgloseCompleto.desglose.pisoObraCivil.toLocaleString('es-AR', {minimumFractionDigits: 2})}
+               </Text>
+               <Text style={styles.desgloseItem}>
+                 Mano de Obra: USD {desgloseCompleto.desglose.manoDeObra.toLocaleString('es-AR', {minimumFractionDigits: 2})}
+               </Text>
+               <Text style={styles.desgloseItem}>
+                 Logística: USD {desgloseCompleto.desglose.logisticaYOtros.toLocaleString('es-AR', {minimumFractionDigits: 2})}
+               </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.guardarButton}
+              onPress={handleGuardarHistorial}
+              activeOpacity={0.8}
+            >
               <Text style={styles.guardarButtonText}>GUARDAR EN HISTORIAL</Text>
             </TouchableOpacity>
           </View>
         )}
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
 }
 
-// --- ESTILOS DARK MODE & ORANGE ---
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: '#121212' },
-  scroll: { flex: 1, backgroundColor: '#121212' },
+  scroll: { flex: 1 },
   container: { padding: 16, paddingBottom: 32 },
-  
-  // HEADER
-  headerContainer: { marginTop: 40, marginBottom: 24, alignItems: 'center' },
-  brandTitle: { fontSize: 28, fontWeight: '900', color: '#F59E0B', letterSpacing: 1, textTransform: 'uppercase' },
-  brandSubtitle: { fontSize: 14, color: '#A1A1AA', marginTop: 2, letterSpacing: 0.5 },
 
-  // CARDS / SECCIONES
+  headerContainer: { marginTop: 40, marginBottom: 24, alignItems: 'center' },
+  brandTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#F59E0B',
+    letterSpacing: 1,
+  },
+  brandSubtitle: { fontSize: 14, color: '#A1A1AA' },
+
   card: {
     backgroundColor: '#1E1E1E',
     borderRadius: 12,
@@ -702,14 +1067,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#27272A',
   },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 16 },
-  
-  // TEXTOS
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 16,
+  },
+
   label: { fontSize: 16, color: '#fff', fontWeight: '500' },
   labelSmall: { fontSize: 15, color: '#E4E4E7' },
   subLabel: { fontSize: 13, color: '#A1A1AA', marginBottom: 6 },
-  
-  // INPUTS
+
   input: {
     backgroundColor: '#27272A',
     borderWidth: 1,
@@ -718,49 +1086,47 @@ const styles = StyleSheet.create({
     color: '#fff',
     padding: 12,
     fontSize: 16,
-    marginTop: 4,
+    marginBottom: 8,
   },
-  rowInputs: { flexDirection: 'row', gap: 12, marginBottom: 8 },
+  rowInputs: { flexDirection: 'row', gap: 12 },
   halfInput: { flex: 1 },
 
-  // BOTONES SELECTORES
   opcionesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   opcionBtn: {
     backgroundColor: '#27272A',
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#3F3F46',
   },
-  opcionBtnActivo: {
-    backgroundColor: '#F59E0B',
-    borderColor: '#F59E0B',
-  },
-  opcionBtnText: { color: '#A1A1AA', fontSize: 13, fontWeight: '500' },
+  opcionBtnActivo: { backgroundColor: '#F59E0B', borderColor: '#F59E0B' },
+  opcionBtnText: { color: '#A1A1AA', fontSize: 12, fontWeight: '500' },
   opcionBtnTextActivo: { color: '#000', fontWeight: '700' },
 
-  // UTILS
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  subSection: { marginTop: 12, paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: '#3F3F46' },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  subSection: {
+    marginTop: 12,
+    paddingLeft: 10,
+    borderLeftWidth: 2,
+    borderLeftColor: '#3F3F46',
+  },
   separator: { height: 1, backgroundColor: '#3F3F46', marginVertical: 12 },
 
-  // ACCIONES PRINCIPALES
   calcButton: {
     backgroundColor: '#F59E0B',
-    paddingVertical: 18,
+    paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 12,
-    shadowColor: '#F59E0B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  calcButtonText: { color: '#000', fontSize: 18, fontWeight: '800', letterSpacing: 0.5 },
+  calcButtonText: { color: '#000', fontSize: 18, fontWeight: '800' },
 
-  // RESULTADO
   resultadoBox: {
     marginTop: 24,
     backgroundColor: '#000',
@@ -770,17 +1136,29 @@ const styles = StyleSheet.create({
     borderColor: '#F59E0B',
     alignItems: 'center',
   },
-  resultadoLabel: { color: '#F59E0B', fontSize: 14, fontWeight: '600', textTransform: 'uppercase', marginBottom: 4 },
-  resultadoPrecio: { color: '#fff', fontSize: 32, fontWeight: '700', marginBottom: 16 },
+  resultadoLabel: { color: '#F59E0B', fontSize: 14, fontWeight: '600' },
+  resultadoPrecio: {
+    color: '#fff',
+    fontSize: 32,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  desgloseContainer: {
+    width: '100%',
+    padding: 10,
+    backgroundColor: '#111',
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  desgloseItem: { color: '#ccc', fontSize: 14, marginBottom: 4 },
   guardarButton: {
     backgroundColor: '#27272A',
     paddingVertical: 12,
-    paddingHorizontal: 24,
+    width: '100%',
+    alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#3F3F46',
-    width: '100%',
-    alignItems: 'center',
   },
   guardarButtonText: { color: '#fff', fontWeight: '600' },
 });
