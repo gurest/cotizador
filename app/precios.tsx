@@ -27,17 +27,12 @@ if (
 
 const STORAGE_KEY = '@cotizador_precios';
 
-// --- LISTAS DE MEDIDAS ESTÁNDAR ---
-const MEDIDAS_IPN = ['IPN 200', 'IPN 240', 'IPN 300', 'IPN 340', 'IPN 400', 'IPN 450', 'IPN 500'];
-const MEDIDAS_W = ['W 200', 'W 250', 'W 310', 'W 360', 'W 410', 'W 460'];
-const MEDIDAS_TUBO = ['100x100', '120x120', '140x140', '160x160', '180x180', '200x200', '220x220', '260x260'];
-const MEDIDAS_PERFIL_C = ['C 80', 'C 100', 'C 120', 'C 140', 'C 160', 'C 180', 'C 200', 'C 220'];
-const ALTURAS_RETICULADO = ['300 mm', '400 mm', '500 mm', '600 mm', '800 mm', '1000 mm'];
-const MATERIALES_RETICULADO = ['Angulo', 'Hierro Redondo', 'Perfil C'];
-
-// --- ESTADO INICIAL ---
+// --- ESTADO INICIAL ACTUALIZADO ---
+// Se eliminaron las listas fijas de medidas y se separó el acero
 const defaultPrecios: ConfigPrecios = {
-  precioAcero: 0,
+  precioAceroEstructural: 0,
+  precioAceroTubular: 0,
+  precioAcero: 0, // Fallback por las dudas
   precioChapa: 0,
   precioAislacion: 0,
   precioPanelIgnifugo: 0,
@@ -50,7 +45,8 @@ const defaultPrecios: ConfigPrecios = {
   precioHormigonH30: 0,
   precioMallaCima: 0,
 
-  pesosIPN: {}, // Se llenará dinámicamente
+  // Mantenemos los objetos vacíos por seguridad si un historial viejo los busca
+  pesosIPN: {}, 
   pesosW: {},
   pesosTubo: {},
   pesosPerfilC: {},
@@ -145,11 +141,9 @@ export default function PreciosScreen() {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Fusionamos con el default para asegurar que existan todas las claves nuevas
         setPrecios((prev) => ({
           ...defaultPrecios,
           ...parsed,
-          // Aseguramos que los objetos anidados existan si el stored es viejo
           pesosIPN: { ...defaultPrecios.pesosIPN, ...parsed.pesosIPN },
           pesosW: { ...defaultPrecios.pesosW, ...parsed.pesosW },
           pesosTubo: { ...defaultPrecios.pesosTubo, ...parsed.pesosTubo },
@@ -177,19 +171,8 @@ export default function PreciosScreen() {
     }
   };
 
-  // Helpers para actualizar estado
   const updateField = (key: keyof ConfigPrecios, val: string) => {
     setPrecios(prev => ({ ...prev, [key]: parseFloat(val) || 0 }));
-  };
-
-  const updateNested = (parent: keyof ConfigPrecios, key: string, val: string) => {
-    setPrecios(prev => ({
-      ...prev,
-      [parent]: {
-        ...(prev[parent] as Record<string, number>),
-        [key]: parseFloat(val) || 0
-      }
-    }));
   };
 
   return (
@@ -202,7 +185,7 @@ export default function PreciosScreen() {
       
       <View style={styles.header}>
         <Text style={styles.brandTitle}>CONFIGURACIÓN</Text>
-        <Text style={styles.brandSubtitle}>Costos Unitarios y Pesos Específicos</Text>
+        <Text style={styles.brandSubtitle}>Costos Unitarios Base</Text>
       </View>
 
       <ScrollView 
@@ -217,7 +200,8 @@ export default function PreciosScreen() {
           isOpen={openSection === 'base'} 
           onToggle={() => toggleSection('base')}
         >
-          <InputRow label="Precio Acero Base" value={precios.precioAcero} onChange={v => updateField('precioAcero', v)} suffix="USD/kg" />
+          <InputRow label="Precio Acero Estructural (IPN/W/C/Ret)" value={precios.precioAceroEstructural} onChange={v => updateField('precioAceroEstructural', v)} suffix="USD/kg" />
+          <InputRow label="Precio Acero Tubular (Tubos)" value={precios.precioAceroTubular} onChange={v => updateField('precioAceroTubular', v)} suffix="USD/kg" />
           <InputRow label="Precio Chapa Cubierta" value={precios.precioChapa} onChange={v => updateField('precioChapa', v)} suffix="USD/m²" />
           <InputRow label="Precio Aislación Std" value={precios.precioAislacion} onChange={v => updateField('precioAislacion', v)} suffix="USD/m²" />
           <InputRow label="Precio Panel Ignífugo" value={precios.precioPanelIgnifugo} onChange={v => updateField('precioPanelIgnifugo', v)} suffix="USD/m²" />
@@ -246,106 +230,7 @@ export default function PreciosScreen() {
           <InputRow label="Malla Cima" value={precios.precioMallaCima} onChange={v => updateField('precioMallaCima', v)} suffix="USD/m²" />
         </AccordionSection>
 
-        {/* --- PESOS ESPECIFICOS --- */}
-        <View style={styles.sectionHeaderContainer}>
-          <Text style={styles.sectionHeaderText}>PESOS POR METRO LINEAL (kg/m)</Text>
-        </View>
-
-        {/* 4. PERFILES C */}
-        <AccordionSection 
-          title="Perfiles C (Correas y Estructura)" 
-          isOpen={openSection === 'perfilC'} 
-          onToggle={() => toggleSection('perfilC')}
-        >
-          {MEDIDAS_PERFIL_C.map(medida => (
-            <InputRow 
-              key={medida} 
-              label={`Peso ${medida}`} 
-              value={precios.pesosPerfilC[medida]} 
-              onChange={v => updateNested('pesosPerfilC', medida, v)} 
-              suffix="kg/m"
-            />
-          ))}
-        </AccordionSection>
-
-        {/* 5. PERFILES IPN */}
-        <AccordionSection 
-          title="Perfiles IPN (Alma Llena)" 
-          isOpen={openSection === 'ipn'} 
-          onToggle={() => toggleSection('ipn')}
-        >
-          {MEDIDAS_IPN.map(medida => (
-            <InputRow 
-              key={medida} 
-              label={`Peso ${medida}`} 
-              value={precios.pesosIPN[medida]} 
-              onChange={v => updateNested('pesosIPN', medida, v)} 
-              suffix="kg/m"
-            />
-          ))}
-        </AccordionSection>
-
-        {/* 6. PERFILES W */}
-        <AccordionSection 
-          title="Perfiles W (Alma Llena)" 
-          isOpen={openSection === 'w'} 
-          onToggle={() => toggleSection('w')}
-        >
-          {MEDIDAS_W.map(medida => (
-            <InputRow 
-              key={medida} 
-              label={`Peso ${medida}`} 
-              value={precios.pesosW[medida]} 
-              onChange={v => updateNested('pesosW', medida, v)} 
-              suffix="kg/m"
-            />
-          ))}
-        </AccordionSection>
-
-        {/* 7. TUBOS */}
-        <AccordionSection 
-          title="Tubos Estructurales" 
-          isOpen={openSection === 'tubo'} 
-          onToggle={() => toggleSection('tubo')}
-        >
-          {MEDIDAS_TUBO.map(medida => (
-            <InputRow 
-              key={medida} 
-              label={`Peso ${medida}`} 
-              value={precios.pesosTubo[medida]} 
-              onChange={v => updateNested('pesosTubo', medida, v)} 
-              suffix="kg/m"
-            />
-          ))}
-        </AccordionSection>
-
-        {/* 8. RETICULADOS (Matriz Compleja) */}
-        <AccordionSection 
-          title="Reticulados (Por Altura y Material)" 
-          isOpen={openSection === 'reticulado'} 
-          onToggle={() => toggleSection('reticulado')}
-        >
-          <Text style={styles.infoText}>Defina el peso aprox. por metro de la viga/columna terminada.</Text>
-          {ALTURAS_RETICULADO.map(altura => (
-            <View key={altura} style={styles.subSection}>
-              <Text style={styles.subTitle}>{altura}</Text>
-              {MATERIALES_RETICULADO.map(material => {
-                const key = `${altura}_${material}`;
-                return (
-                  <InputRow 
-                    key={key}
-                    label={`Con ${material}`} 
-                    value={precios.pesosReticulado[key]} 
-                    onChange={v => updateNested('pesosReticulado', key, v)} 
-                    suffix="kg/m"
-                  />
-                );
-              })}
-            </View>
-          ))}
-        </AccordionSection>
-
-        {/* 9. MANO DE OBRA Y LOGISTICA */}
+        {/* 4. MANO DE OBRA Y LOGISTICA */}
         <View style={styles.sectionHeaderContainer}>
           <Text style={styles.sectionHeaderText}>MANO DE OBRA Y SERVICIOS</Text>
         </View>
@@ -373,7 +258,7 @@ export default function PreciosScreen() {
           <InputRow label="Selladores Zinguería" value={precios.selladoresZingueria} onChange={v => updateField('selladoresZingueria', v)} suffix="USD/m" />
         </AccordionSection>
 
-        {/* 10. MARGENES */}
+        {/* 5. MARGENES */}
         <AccordionSection 
           title="Márgenes de Ganancia" 
           isOpen={openSection === 'margenes'} 
@@ -418,11 +303,6 @@ const styles = StyleSheet.create({
   inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#121212', borderRadius: 8, borderWidth: 1, borderColor: '#3F3F46' },
   input: { flex: 1, color: '#fff', padding: 12, fontSize: 16 },
   suffix: { color: '#52525B', paddingRight: 12, fontSize: 13, fontWeight: '600' },
-
-  // Subsecciones (Reticulados)
-  subSection: { marginBottom: 20, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: '#3F3F46' },
-  subTitle: { color: '#F59E0B', fontSize: 14, fontWeight: '700', marginBottom: 10 },
-  infoText: { color: '#52525B', fontSize: 12, marginBottom: 12, fontStyle: 'italic' },
 
   // Botón
   saveButton: { backgroundColor: '#F59E0B', paddingVertical: 18, borderRadius: 12, alignItems: 'center', marginTop: 24, shadowColor: '#F59E0B', shadowOpacity: 0.2, shadowRadius: 5 },

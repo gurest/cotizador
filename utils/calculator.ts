@@ -1,8 +1,11 @@
 /**
  * utils/calculator.ts
- * * Lógica de cálculo actualizada para QUICKSHEED.
- * Incluye desglose por tipo de perfil, medidas específicas,
- * accesorios (eólicos, luces, puertas) y lógica de Perfil C.
+ * * Lógica de cálculo actualizada para QUICKSHEED / CARMON.
+ * * Sistema Dinámico: Soporta ingreso manual de peso (kg/m).
+ * * Diferenciación de precios: Acero Estructural vs Tubular.
+ * * Desglose exacto de cantidades para el historial.
+ * * NUEVO: Formateador infalible de moneda (es-AR).
+ * * NUEVO: Exportación de Ganancia neta para la "Doble Cara".
  */
 
 // --- TIPOS Y DEFINICIONES ---
@@ -13,7 +16,7 @@ export type TipoViga = 'Alma llena' | 'Reticulado' | 'Perfil C';
 // Material interno del reticulado
 export type MaterialReticulado = 'Hierro Redondo' | 'Angulo' | 'Perfil C';
 
-// Medidas Estandarizadas (Strings fijos para evitar errores)
+// Medidas Estandarizadas
 export type MedidaIPN = 'IPN 200' | 'IPN 240' | 'IPN 300' | 'IPN 340' | 'IPN 400' | 'IPN 450' | 'IPN 500';
 export type MedidaW = 'W 200' | 'W 250' | 'W 310' | 'W 360' | 'W 410' | 'W 460';
 export type MedidaTubo = '100x100' | '120x120' | '140x140' | '160x160' | '180x180' | '200x200' | '220x220' | '260x260';
@@ -25,40 +28,36 @@ export type TipoHormigon = 'H21 (Liviano)' | 'H30 (Industrial)';
 
 // Interfaz de entrada desde la pantalla Cotizar
 export interface DatosCotizacion {
-  // Dimensiones
   ancho: number;
   largo: number;
   altoHombrera: number;
   pendiente: number;
 
-  // Estructura Columna
   tipoColumna: TipoColumna;
-  subTipoColumna?: 'IPN' | 'W'; // Solo si es Alma llena
-  medidaColumna?: string; // IPN xxx, W xxx, Tubo xxx, C xxx, o Altura Reticulado
-  materialReticuladoColumna?: MaterialReticulado; // Nuevo: Solo si es reticulado
+  subTipoColumna?: 'IPN' | 'W';
+  medidaColumna?: string;
+  materialReticuladoColumna?: MaterialReticulado;
+  pesoMetroColumna?: number;
 
-  // Estructura Viga
   tipoViga: TipoViga;
   subTipoViga?: 'IPN' | 'W';
   medidaViga?: string;
-  materialReticuladoViga?: MaterialReticulado; // Nuevo
+  materialReticuladoViga?: MaterialReticulado;
+  pesoMetroViga?: number;
 
-  // Cerramientos
   cerramientoLateral: boolean;
   cerramientoLateralChapa?: string;
   cerramientoFrenteFondo: boolean;
   cerramientoFrenteFondoChapa?: string;
   
-  // Accesos
   portones: boolean;
   cantidadPortones: number;
   portonesAncho: number;
   portonesAlto: number;
-  configuracionPorton?: string; // Simple/Doble
-  puertasAuxiliares: boolean; // Nuevo
-  cantidadPuertasAuxiliares: number; // Nuevo
+  configuracionPorton?: string;
+  puertasAuxiliares: boolean;
+  cantidadPuertasAuxiliares: number;
 
-  // Techo y Aislaciones
   aislacionTecho: boolean;
   tipoAislacionTecho?: string;
   aislacionLateral: boolean;
@@ -66,69 +65,58 @@ export interface DatosCotizacion {
   aislacionFrenteFondo: boolean;
   tipoAislacionFrenteFondo?: string;
 
-  // Accesorios Techo (Nuevos)
   chapasTraslucidas: boolean;
   cantidadChapasTraslucidas: number;
   ventilacionEolica: boolean;
   cantidadEolicos: number;
 
-  // Piso (Nuevo lógica completa)
   pisoHormigon: boolean;
   tipoHormigon?: TipoHormigon;
-  espesorPiso?: string; // ej "15 cm"
+  espesorPiso?: string;
   estudioSuelo: boolean;
   hormigonEntrada: boolean;
   distanciaEntrada?: number;
   terminacionPiso?: string;
 
-  // Logística
   distanciaKm: number;
   incluirElevacion: boolean;
 }
 
-// Interfaz de Configuración de Precios (Global)
-// Ahora almacena pesos por metro lineal y precios unitarios
+// Interfaz de Configuración de Precios
 export interface ConfigPrecios {
-  // --- COSTOS BASE MATERIALES ---
-  precioAcero: number;        // USD/kg
-  precioChapa: number;        // USD/m2
-  precioAislacion: number;    // USD/m2 (Promedio o base)
-  precioPanelIgnifugo: number;// USD/m2 extra
+  precioAceroEstructural: number; 
+  precioAceroTubular: number;     
+  precioAcero?: number;           
+  precioChapa: number;            
+  precioAislacion: number;        
+  precioPanelIgnifugo: number;    
   
-  // --- COSTOS UNITARIOS ACCESORIOS (NUEVOS) ---
-  precioEolico: number;             // USD c/u
-  precioChapaTraslucida: number;    // USD c/u
-  precioPuertaEmergencia: number;   // USD c/u
-  precioEstudioSuelo: number;       // USD Global
-  precioHormigonH21: number;        // USD/m3
-  precioHormigonH30: number;        // USD/m3
-  precioMallaCima: number;          // USD/m2 (para el piso)
+  precioEolico: number;             
+  precioChapaTraslucida: number;    
+  precioPuertaEmergencia: number;   
+  precioEstudioSuelo: number;       
+  precioHormigonH21: number;        
+  precioHormigonH30: number;        
+  precioMallaCima: number;          
 
-  // --- PESOS ESPECÍFICOS (kg por metro lineal) ---
-  // Se usarán para calcular el peso exacto de la estructura
-  pesosIPN: Record<string, number>;      // ej: { 'IPN 200': 26.2, ... }
-  pesosW: Record<string, number>;        // ej: { 'W 200': 30.5, ... }
-  pesosTubo: Record<string, number>;     // ej: { '100x100': 12.5, ... }
-  pesosPerfilC: Record<string, number>;  // ej: { 'C 120': 8.5, ... }
-  
-  // Para reticulados, definimos un peso estimado por metro lineal de columna/viga
-  // basándonos en su altura (300mm, etc) y su material de relleno
-  pesosReticulado: Record<string, number>; // clave ej: "300mm_Angulo", "500mm_PerfilC"
+  pesosIPN: Record<string, number>;
+  pesosW: Record<string, number>;
+  pesosTubo: Record<string, number>;
+  pesosPerfilC: Record<string, number>;
+  pesosReticulado: Record<string, number>;
 
-  // --- MANO DE OBRA Y OTROS ---
-  tornilleriaFijaciones: number; // USD global o % (interpretado como global en este cálculo simplificado)
-  selladoresZingueria: number;   // USD por metro lineal de perímetro
-  manoObraFabricacion: number;   // USD/kg
-  montajeEstructura: number;     // USD/m2
-  ingenieriaPlanos: number;      // USD Global
-  pinturaTratamiento: number;    // USD/m2 cubierta total
-  mediosElevacion: number;       // USD Global
-  logisticaFletes: number;       // USD/km
-  viaticos: number;              // USD Global
+  tornilleriaFijaciones: number; 
+  selladoresZingueria: number;   
+  manoObraFabricacion: number;   
+  montajeEstructura: number;     
+  ingenieriaPlanos: number;      
+  pinturaTratamiento: number;    
+  mediosElevacion: number;       
+  logisticaFletes: number;       
+  viaticos: number;              
   
-  // --- MÁRGENES ---
-  margenGanancia: number;          // %
-  imprevistosContingencia: number; // %
+  margenGanancia: number;          
+  imprevistosContingencia: number; 
 }
 
 // Resultado final devuelto a la pantalla
@@ -136,14 +124,27 @@ export interface ResultadoPresupuesto {
   total: number;
   subtotal: number;
   desglose: {
-    materialesEstructura: number; // Acero
-    cubiertasYAislaciones: number; // Chapas + Aislaciones
-    accesorios: number;           // Eólicos, Luces, Puertas
-    pisoObraCivil: number;        // Hormigón, Mov suelo
-    manoDeObra: number;           // Fab + Montaje + Pintura
-    logisticaYOtros: number;      // Fletes, Elevación, Ing
+    materialesEstructura: number;
+    cubiertasYAislaciones: number;
+    accesorios: number;
+    pisoObraCivil: number;
+    manoDeObra: number;
+    logisticaYOtros: number;
+  };
+  cantidades: {
+    kgAceroTotal: number;
+    areaChapaTotal: number;
+  };
+  // NUEVO: Datos exactos de ganancia para la "Doble Cara"
+  ganancia: {
+    porcentajeImprevistos: number;
+    montoImprevistos: number;
+    porcentajeGanancia: number;
+    montoGanancia: number;
   };
 }
+
+// --- HERRAMIENTAS GLOBALES DEL TALLER ---
 
 // Función auxiliar para sanitizar números
 function n(val: any): number {
@@ -151,39 +152,48 @@ function n(val: any): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-// Función auxiliar para obtener el peso por metro según configuración
+// NUEVO: Función infalible para formatear dinero y kilos (ej: 1.500.320,50)
+export function formatearMoneda(numero: number | string | undefined | null): string {
+  if (numero === undefined || numero === null) return '0,00';
+  const numCrudo = parseFloat(numero.toString());
+  if (isNaN(numCrudo)) return '0,00';
+  
+  // Forzamos 2 decimales y separamos la parte entera de los centavos
+  const partes = numCrudo.toFixed(2).split('.');
+  
+  // Le clavamos el punto de los miles a la parte entera
+  partes[0] = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  
+  // Unimos todo con una coma
+  return partes.join(',');
+}
+
+// Función auxiliar para obtener el peso por metro
 function obtenerPesoMetro(
   tipo: TipoColumna | TipoViga,
-  subTipo: string | undefined, // IPN, W
-  medida: string | undefined,  // 200, 240, etc
+  subTipo: string | undefined,
+  medida: string | undefined,
   materialReticulado: MaterialReticulado | undefined,
   config: ConfigPrecios
 ): number {
   if (!medida) return 0;
 
-  // 1. Perfil C Directo
   if (tipo === 'Perfil C') {
-    return config.pesosPerfilC[medida] || 0;
+    return config.pesosPerfilC?.[medida] || 0;
   }
 
-  // 2. Alma Llena (IPN / W)
   if (tipo === 'Alma llena') {
-    if (subTipo === 'IPN') return config.pesosIPN[medida] || 0;
-    if (subTipo === 'W') return config.pesosW[medida] || 0;
+    if (subTipo === 'IPN') return config.pesosIPN?.[medida] || 0;
+    if (subTipo === 'W') return config.pesosW?.[medida] || 0;
   }
 
-  // 3. Tubo
   if (tipo === 'Tubo') {
-    return config.pesosTubo[medida] || 0;
+    return config.pesosTubo?.[medida] || 0;
   }
 
-  // 4. Reticulado
   if (tipo === 'Reticulado' && materialReticulado) {
-    // La clave en el objeto config será combinada, ej: "300 mm_Angulo"
-    // Normalizamos quitando espacios si es necesario en la clave
     const key = `${medida}_${materialReticulado}`;
-    // Si no encuentra la combinación exacta, intenta buscar solo por medida (fallback)
-    return config.pesosReticulado[key] || config.pesosReticulado[medida] || 25; // 25kg/m fallback conservador
+    return config.pesosReticulado?.[key] || config.pesosReticulado?.[medida] || 25;
   }
 
   return 0;
@@ -213,71 +223,64 @@ export function calcularPresupuesto(
         pisoObraCivil: 0,
         manoDeObra: 0,
         logisticaYOtros: 0,
+      },
+      cantidades: {
+        kgAceroTotal: 0,
+        areaChapaTotal: 0,
+      },
+      ganancia: {
+        porcentajeImprevistos: 0,
+        montoImprevistos: 0,
+        porcentajeGanancia: 0,
+        montoGanancia: 0,
       }
     };
   }
 
+  const precioEstructural = n(config.precioAceroEstructural) > 0 ? n(config.precioAceroEstructural) : n(config.precioAcero);
+  const precioTubular = n(config.precioAceroTubular) > 0 ? n(config.precioAceroTubular) : n(config.precioAcero);
+
   // --- 1. GEOMETRÍA Y ESTRUCTURA ---
   
-  // Estimación de Pórticos (Marcos)
-  // Asumimos separación estándar de 5m.
   const separacionPorticos = 5;
-  const cantidadPorticos = Math.ceil(largo / separacionPorticos) + 1; // +1 para cerrar el final
+  const cantidadPorticos = Math.ceil(largo / separacionPorticos) + 1;
 
-  // Longitud de vigas (Rafters) usando Pitágoras
-  // Asumimos techo a dos aguas simétrico para simplificar longitud (ancho / 2)
-  // Si es un agua, el factor cubre la hipotenusa igual.
   const factorPendiente = Math.sqrt(1 + Math.pow(pendiente / 100, 2));
   const longitudVigaTecho = ancho * factorPendiente; 
 
-  // Metros lineales totales de perfiles PRINCIPALES
-  // (No incluye correas, eso se calcula por m2 o porcentaje, aquí simplificamos en kg/m2 extra o sumamos correas perfil C)
-  // Para ser precisos con los Perfiles C que pidió el usuario, calcularemos las correas como Perfil C estándar.
-  
-  const metrosLinealesColumnas = cantidadPorticos * 2 * alto; // 2 columnas por pórtico
+  const metrosLinealesColumnas = cantidadPorticos * 2 * alto;
   const metrosLinealesVigas = cantidadPorticos * longitudVigaTecho; 
 
-  // Peso Columna Principal
-  const pesoMetroColumna = obtenerPesoMetro(
-    datos.tipoColumna,
-    datos.subTipoColumna,
-    datos.medidaColumna,
-    datos.materialReticuladoColumna,
-    config
-  );
+  const pesoMetroColumna = n(datos.pesoMetroColumna) > 0 
+    ? n(datos.pesoMetroColumna) 
+    : obtenerPesoMetro(datos.tipoColumna, datos.subTipoColumna, datos.medidaColumna, datos.materialReticuladoColumna, config);
   const kgTotalColumnas = metrosLinealesColumnas * pesoMetroColumna;
+  
+  const costoColumnas = kgTotalColumnas * (datos.tipoColumna === 'Tubo' ? precioTubular : precioEstructural);
 
-  // Peso Viga Principal
-  const pesoMetroViga = obtenerPesoMetro(
-    datos.tipoViga,
-    datos.subTipoViga,
-    datos.medidaViga,
-    datos.materialReticuladoViga,
-    config
-  );
+  const pesoMetroViga = n(datos.pesoMetroViga) > 0 
+    ? n(datos.pesoMetroViga) 
+    : obtenerPesoMetro(datos.tipoViga, datos.subTipoViga, datos.medidaViga, datos.materialReticuladoViga, config);
   const kgTotalVigas = metrosLinealesVigas * pesoMetroViga;
+  
+  const costoVigas = kgTotalVigas * precioEstructural;
 
-  // Correas (Purlins) - Usualmente Perfil C
-  // Estimación: Filas de correas separadas cada 1.2m aprox a lo largo del techo
   const filasCorreas = Math.ceil(ancho / 1.2); 
   const metrosLinealesCorreas = filasCorreas * largo; 
-  // Asumimos un Perfil C 100 o 120 promedio para correas (aprox 4.5 kg/m) si no se especifica
-  // O usamos el precio del Perfil C configurado más común. Usaremos un factor fijo de 5kg/m para correas.
   const kgTotalCorreas = metrosLinealesCorreas * 5; 
+  const costoCorreas = kgTotalCorreas * precioEstructural;
 
-  // Totales Acero
   const kgAceroTotal = kgTotalColumnas + kgTotalVigas + kgTotalCorreas;
-  const costoAcero = kgAceroTotal * n(config.precioAcero);
+  const costoAcero = costoColumnas + costoVigas + costoCorreas;
 
   // --- 2. CUBIERTAS Y CERRAMIENTOS ---
   
-  const areaTecho = ancho * largo * factorPendiente; // Area real inclinada
+  const areaTecho = ancho * largo * factorPendiente; 
   
   let areaParedes = 0;
   if (datos.cerramientoLateral) areaParedes += 2 * largo * alto;
   if (datos.cerramientoFrenteFondo) areaParedes += 2 * ancho * alto;
 
-  // Restar huecos de portones
   let areaHuecos = 0;
   if (datos.portones && datos.cantidadPortones > 0) {
     areaHuecos += n(datos.cantidadPortones) * n(datos.portonesAncho) * n(datos.portonesAlto);
@@ -287,19 +290,14 @@ export function calcularPresupuesto(
   const areaChapaTotal = areaTecho + areaParedes;
   const costoChapa = areaChapaTotal * n(config.precioChapa);
 
-  // Aislaciones
   let costoAislacionTotal = 0;
-  // Aislación Techo
   if (datos.aislacionTecho) {
-    // Si eligió panel ignífugo en el select (lógica simple: precio base + extra ignífugo si aplica)
-    // Asumiremos que 'tipoAislacionTecho' viene como string.
     let precioAis = n(config.precioAislacion);
     if (datos.tipoAislacionTecho?.toLowerCase().includes('ignífugo')) {
       precioAis = n(config.precioPanelIgnifugo);
     }
     costoAislacionTotal += areaTecho * precioAis;
   }
-  // Aislación Paredes
   if (datos.aislacionLateral) {
      costoAislacionTotal += (2 * largo * alto) * n(config.precioAislacion);
   }
@@ -307,53 +305,43 @@ export function calcularPresupuesto(
      costoAislacionTotal += (2 * ancho * alto) * n(config.precioAislacion);
   }
 
-  // --- 3. ACCESORIOS (NUEVO) ---
+  // --- 3. ACCESORIOS ---
   
   let costoAccesorios = 0;
 
-  // Eólicos
   if (datos.ventilacionEolica && datos.cantidadEolicos > 0) {
     costoAccesorios += n(datos.cantidadEolicos) * n(config.precioEolico);
   }
 
-  // Chapas Traslúcidas
   if (datos.chapasTraslucidas && datos.cantidadChapasTraslucidas > 0) {
     costoAccesorios += n(datos.cantidadChapasTraslucidas) * n(config.precioChapaTraslucida);
   }
 
-  // Puertas Emergencia
   if (datos.puertasAuxiliares && datos.cantidadPuertasAuxiliares > 0) {
     costoAccesorios += n(datos.cantidadPuertasAuxiliares) * n(config.precioPuertaEmergencia);
   }
 
-  // Estudio de Suelo
   if (datos.estudioSuelo) {
     costoAccesorios += n(config.precioEstudioSuelo);
   }
 
-  // --- 4. OBRA CIVIL / PISO (NUEVO) ---
+  // --- 4. OBRA CIVIL / PISO ---
   
   let costoPisoObraCivil = 0;
   if (datos.pisoHormigon) {
-    const espesorMetros = datos.espesorPiso ? (parseFloat(datos.espesorPiso) / 100) : 0.15; // default 15cm
+    const espesorMetros = datos.espesorPiso ? (parseFloat(datos.espesorPiso) / 100) : 0.15;
     const areaPiso = ancho * largo;
     const volumenHormigon = areaPiso * espesorMetros;
 
-    // Precio según tipo
     let precioM3 = n(config.precioHormigonH21);
     if (datos.tipoHormigon?.includes('H30')) {
       precioM3 = n(config.precioHormigonH30);
     }
     
-    // Costo del Hormigón
     costoPisoObraCivil += volumenHormigon * precioM3;
-
-    // Malla cima (hierro para piso) - precio x m2
     costoPisoObraCivil += areaPiso * n(config.precioMallaCima);
 
-    // Entrada vehicular
     if (datos.hormigonEntrada && datos.distanciaEntrada) {
-      // Suponemos entrada de 6m de ancho estándar
       const volEntrada = (n(datos.distanciaEntrada) * 6) * espesorMetros;
       costoPisoObraCivil += volEntrada * precioM3;
     }
@@ -362,15 +350,13 @@ export function calcularPresupuesto(
   // --- 5. MANO DE OBRA Y SERVICIOS ---
   
   const costoFabricacion = kgAceroTotal * n(config.manoObraFabricacion);
-  const costoMontaje = (ancho * largo) * n(config.montajeEstructura); // Se cobra por m2 de planta usualmente
+  const costoMontaje = (ancho * largo) * n(config.montajeEstructura);
   const costoPintura = areaChapaTotal * n(config.pinturaTratamiento);
   
-  // Tornilleria y Selladores
-  const costoTornilleria = n(config.tornilleriaFijaciones); // Si es global
+  const costoTornilleria = n(config.tornilleriaFijaciones);
   const perimetro = 2 * (ancho + largo);
   const costoSelladores = perimetro * n(config.selladoresZingueria);
 
-  // Logística
   let costoFlete = n(datos.distanciaKm) * n(config.logisticaFletes);
   let costoElevacion = datos.incluirElevacion ? n(config.mediosElevacion) : 0;
   let costoIngenieria = n(config.ingenieriaPlanos);
@@ -390,10 +376,13 @@ export function calcularPresupuesto(
                    totalManoDeObra + 
                    totalLogistica;
 
-  // Márgenes
-  const imprevistos = subtotal * (n(config.imprevistosContingencia) / 100);
+  // LÓGICA DE MÁRGENES (Separada para exportar)
+  const porcImprevistos = n(config.imprevistosContingencia);
+  const imprevistos = subtotal * (porcImprevistos / 100);
   const baseConImprevistos = subtotal + imprevistos;
-  const ganancia = baseConImprevistos * (n(config.margenGanancia) / 100);
+  
+  const porcGanancia = n(config.margenGanancia);
+  const ganancia = baseConImprevistos * (porcGanancia / 100);
   
   const totalFinal = baseConImprevistos + ganancia;
 
@@ -408,5 +397,16 @@ export function calcularPresupuesto(
       manoDeObra: Math.round(totalManoDeObra * 100) / 100,
       logisticaYOtros: Math.round(totalLogistica * 100) / 100,
     },
+    cantidades: {
+      kgAceroTotal: Math.round(kgAceroTotal * 100) / 100,
+      areaChapaTotal: Math.round(areaChapaTotal * 100) / 100,
+    },
+    // NUEVO: Exportamos la ganancia exacta para mostrar en el historial
+    ganancia: {
+      porcentajeImprevistos: porcImprevistos,
+      montoImprevistos: Math.round(imprevistos * 100) / 100,
+      porcentajeGanancia: porcGanancia,
+      montoGanancia: Math.round(ganancia * 100) / 100,
+    }
   };
 }

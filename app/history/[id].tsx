@@ -1,3 +1,4 @@
+import { formatearMoneda } from '@/utils/calculator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -31,10 +32,27 @@ function formatearFecha(iso: string): string {
 const val = (condicion: boolean, textoTrue: string, textoFalse: string = 'No incluido') => condicion ? textoTrue : textoFalse;
 const txt = (valor: any, sufijo: string = '') => (valor && valor !== '0') ? `${valor} ${sufijo}` : 'No especificado';
 
-// --- GENERADOR DE MENSAJE DETALLADO (WhatsApp / Email) ---
+// --- GENERADOR DE MENSAJE DETALLADO (Doble Cara) ---
 function construirMensajeDetallado(item: any): string {
   const d = item.datosInput || {};
   const des = item.desglose || {};
+  const total = item.total || 0;
+  const subtotal = item.subtotal || total; // Prevenir división por cero si subtotal es 0
+
+  // 1. TRAMPA DEL PRORRATEO: Calculamos el multiplicador para ocultar la ganancia
+  // Si el subtotal es mayor a 0, calculamos la diferencia entre Total y Subtotal
+  let multiplicador = 1;
+  if (subtotal > 0 && total > subtotal) {
+      multiplicador = total / subtotal;
+  }
+
+  // Inflamos cada ítem del desglose con el multiplicador
+  const matInflado = (des.materialesEstructura || 0) * multiplicador;
+  const cubInflado = (des.cubiertasYAislaciones || 0) * multiplicador;
+  const accInflado = (des.accesorios || 0) * multiplicador;
+  const pisoInflado = (des.pisoObraCivil || 0) * multiplicador;
+  const moInflada = (des.manoDeObra || 0) * multiplicador;
+  const logInflada = (des.logisticaYOtros || 0) * multiplicador;
 
   let msg = `🏗️ *PRESUPUESTO QUICKSHEED: ${item.nombreProyecto}*\n`;
   msg += `📅 Fecha: ${formatearFecha(item.fecha)}\n\n`;
@@ -77,14 +95,14 @@ function construirMensajeDetallado(item: any): string {
   msg += `• Elevación: ${val(d.incluirElevacion, 'Incluida')}\n\n`;
 
   // TOTALES
-  msg += `💰 *TOTAL FINAL: USD ${item.total?.toFixed(2)}*\n`;
+  msg += `💰 *TOTAL FINAL: USD ${formatearMoneda(item.total)}*\n`;
   msg += `--------------------------------\n`;
-  msg += `Materiales: USD ${des.materialesEstructura}\n`;
-  msg += `Cubiertas: USD ${des.cubiertasYAislaciones}\n`;
-  msg += `Accesorios: USD ${des.accesorios}\n`;
-  msg += `Obra Civil: USD ${des.pisoObraCivil}\n`;
-  msg += `Mano de Obra: USD ${des.manoDeObra}\n`;
-  msg += `Logística/Ing: USD ${des.logisticaYOtros}\n`;
+  msg += `Materiales: USD ${formatearMoneda(matInflado)}\n`;
+  msg += `Cubiertas: USD ${formatearMoneda(cubInflado)}\n`;
+  msg += `Accesorios: USD ${formatearMoneda(accInflado)}\n`;
+  msg += `Obra Civil: USD ${formatearMoneda(pisoInflado)}\n`;
+  msg += `Mano de Obra: USD ${formatearMoneda(moInflada)}\n`;
+  msg += `Logística/Ing: USD ${formatearMoneda(logInflada)}\n`;
 
   return msg;
 }
@@ -98,7 +116,6 @@ async function enviarPorWhatsApp(item: any) {
     if (supported) {
       await Linking.openURL(url);
     } else {
-      // Fallback si no abre directo (web)
       await Linking.openURL(`https://api.whatsapp.com/send?text=${encodeURIComponent(mensaje)}`);
     }
   } catch {
@@ -109,11 +126,17 @@ async function enviarPorWhatsApp(item: any) {
 async function enviarPorEmail(item: any) {
   const asunto = `Presupuesto: ${item.nombreProyecto}`;
   const cuerpo = construirMensajeDetallado(item);
-  const url = `mailto:?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+  
+  // SOLUCIÓN AL ERROR DEL EMAIL: Forzamos la apertura directa saltando el "canOpenURL" que bloquean los teléfonos nuevos.
+  const mailtoUrl = `mailto:?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+  
   try {
-    await Linking.openURL(url);
-  } catch {
-    Alert.alert('Error', 'No se pudo abrir la app de correo.');
+    await Linking.openURL(mailtoUrl);
+  } catch (error) {
+    Alert.alert(
+        'Aviso', 
+        'Tu teléfono no detectó una aplicación de correo instalada. Por favor, asegúrate de tener Gmail o similar configurado.'
+    );
   }
 }
 
@@ -128,7 +151,6 @@ export default function DetalleHistorialScreen() {
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEY_HISTORIAL);
       const lista = raw ? JSON.parse(raw) : [];
-      // El ID viene como string del params, pero se guardó como number
       const encontrado = lista.find((i: any) => i.id == id);
       setItem(encontrado || null);
     } catch {
@@ -142,7 +164,6 @@ export default function DetalleHistorialScreen() {
     cargar();
   }, [cargar]);
 
-  // Componente de Fila para no repetir código visual
   const Row = ({ label, value, isBool = false }: { label: string, value: any, isBool?: boolean }) => {
     let display = value;
     let inactive = false;
@@ -166,6 +187,7 @@ export default function DetalleHistorialScreen() {
 
   const d = item.datosInput || {};
   const des = item.desglose || {};
+  const gan = item.ganancia || {}; // Intentamos leer la ganancia si la cotización es nueva
 
   return (
     <View style={styles.flex}>
@@ -185,7 +207,7 @@ export default function DetalleHistorialScreen() {
         <View style={styles.mainCard}>
           <Text style={styles.projectTitle}>{item.nombreProyecto}</Text>
           <Text style={styles.projectDate}>{formatearFecha(item.fecha)}</Text>
-          <Text style={styles.totalPrice}>USD {item.total?.toFixed(2)}</Text>
+          <Text style={styles.totalPrice}>USD {formatearMoneda(item.total)}</Text>
         </View>
 
         {/* 1. DIMENSIONES */}
@@ -228,15 +250,30 @@ export default function DetalleHistorialScreen() {
           <Row label="Elevación" value={d.incluirElevacion} isBool />
         </View>
 
-        {/* 5. DESGLOSE ECONÓMICO */}
+        {/* 5. DESGLOSE ECONÓMICO (SOLO PARA VOS - COSTOS REALES) */}
         <View style={[styles.card, { borderColor: '#F59E0B' }]}>
-           <Text style={[styles.cardTitle, { color: '#F59E0B' }]}>DESGLOSE DE COSTOS</Text>
-           <Row label="Materiales Est." value={`USD ${des.materialesEstructura}`} />
-           <Row label="Cubiertas" value={`USD ${des.cubiertasYAislaciones}`} />
-           <Row label="Accesorios" value={`USD ${des.accesorios}`} />
-           <Row label="Obra Civil" value={`USD ${des.pisoObraCivil}`} />
-           <Row label="Mano de Obra" value={`USD ${des.manoDeObra}`} />
-           <Row label="Logística" value={`USD ${des.logisticaYOtros}`} />
+           <Text style={[styles.cardTitle, { color: '#F59E0B' }]}>DESGLOSE DE COSTOS (INTERNO)</Text>
+           <Row label="Materiales Est." value={`USD ${formatearMoneda(des.materialesEstructura)}`} />
+           <Row label="Cubiertas" value={`USD ${formatearMoneda(des.cubiertasYAislaciones)}`} />
+           <Row label="Accesorios" value={`USD ${formatearMoneda(des.accesorios)}`} />
+           <Row label="Obra Civil" value={`USD ${formatearMoneda(des.pisoObraCivil)}`} />
+           <Row label="Mano de Obra" value={`USD ${formatearMoneda(des.manoDeObra)}`} />
+           <Row label="Logística" value={`USD ${formatearMoneda(des.logisticaYOtros)}`} />
+           
+           {/* RENGLÓN DE GANANCIA (Aparece solo si la cotización nueva lo guardó) */}
+           {gan.montoGanancia !== undefined && (
+             <>
+               <View style={styles.divider} />
+               <View style={styles.row}>
+                 <Text style={[styles.labelRow, { color: '#10B981', fontWeight: 'bold' }]}>
+                   Ganancia ({gan.porcentajeGanancia}%)
+                 </Text>
+                 <Text style={[styles.valueRow, { color: '#10B981', fontWeight: 'bold' }]}>
+                   USD {formatearMoneda(gan.montoGanancia)}
+                 </Text>
+               </View>
+             </>
+           )}
         </View>
 
         {/* BOTONES ACCION */}

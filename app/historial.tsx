@@ -1,3 +1,4 @@
+import { formatearMoneda } from '@/utils/calculator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -102,7 +103,8 @@ export default function HistorialScreen() {
           <Text style={styles.cardInfo}>
             {item.datosInput?.ancho || '?'}m x {item.datosInput?.largo || '?'}m
           </Text>
-          <Text style={styles.cardPrice}>USD {precio.toFixed(2)}</Text>
+          {/* APLICAMOS LA FUNCIÓN DE FORMATO AQUÍ */}
+          <Text style={styles.cardPrice}>USD {formatearMoneda(precio)}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -163,7 +165,7 @@ const styles = StyleSheet.create({
   backText: { color: '#F59E0B', fontSize: 16, fontWeight: '600' },
   title: { color: '#fff', fontSize: 18, fontWeight: '700', letterSpacing: 1 },
   deleteButton: { padding: 5 },
-  deleteText: { color: '#EF4444', fontSize: 14, fontWeight: '600' }, // Rojo para borrar
+  deleteText: { color: '#EF4444', fontSize: 14, fontWeight: '600' }, 
 
   listContent: {
     padding: 16,

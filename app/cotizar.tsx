@@ -1,5 +1,6 @@
 import {
   calcularPresupuesto,
+  formatearMoneda,
   type ConfigPrecios,
   type DatosCotizacion,
   type MaterialReticulado,
@@ -31,57 +32,6 @@ const OPCIONES_VIGA = ['Alma llena', 'Reticulado', 'Perfil C'] as const;
 
 const OPCIONES_SUBTIPO_PERFIL = ['IPN', 'W'] as const;
 const MATERIALES_RETICULADO = ['Angulo', 'Hierro Redondo', 'Perfil C'] as const;
-
-// Listas de Medidas
-const MEDIDAS_IPN = [
-  'IPN 200',
-  'IPN 240',
-  'IPN 300',
-  'IPN 340',
-  'IPN 400',
-  'IPN 450',
-  'IPN 500',
-] as const;
-
-const MEDIDAS_W = [
-  'W 200',
-  'W 250',
-  'W 310',
-  'W 360',
-  'W 410',
-  'W 460',
-] as const;
-
-const MEDIDAS_RETICULADO = [
-  '300 mm',
-  '400 mm',
-  '500 mm',
-  '600 mm',
-  '800 mm',
-  '1000 mm',
-] as const;
-
-const MEDIDAS_TUBO = [
-  '100x100',
-  '120x120',
-  '140x140',
-  '160x160',
-  '180x180',
-  '200x200',
-  '220x220',
-  '260x260',
-] as const;
-
-const MEDIDAS_PERFIL_C = [
-  'C 80',
-  'C 100',
-  'C 120',
-  'C 140',
-  'C 160',
-  'C 180',
-  'C 200',
-  'C 220',
-] as const;
 
 const OPCIONES_CHAPA = ['T-101', 'Sinusoidal', 'Prepintada'] as const;
 
@@ -140,7 +90,6 @@ function SelectorOpciones<T extends string>({
   );
 }
 
-// Función separada para el bloque de cerramiento
 function BloqueOpcionalCerramiento({
   titulo,
   activo,
@@ -221,32 +170,28 @@ function BloqueOpcionalCerramiento({
 // --- PANTALLA PRINCIPAL ---
 
 export default function CotizarScreen() {
-  // --- ESTADOS (VARIABLES) ---
   const [nombreProyecto, setNombreProyecto] = useState('');
   
-  // Dimensiones
   const [ancho, setAncho] = useState('');
   const [largo, setLargo] = useState('');
   const [altoHombrera, setAltoHombrera] = useState('');
   const [pendiente, setPendiente] = useState('15');
   
-  // Resultado del cálculo
   const [resultadoCalculo, setResultadoCalculo] = useState<number | null>(null);
   const [desgloseCompleto, setDesgloseCompleto] = useState<any>(null);
 
-  // Estructura Columnas
   const [tipoColumna, setTipoColumna] = useState<TipoColumna>('Alma llena');
   const [subTipoColumna, setSubTipoColumna] = useState<'IPN' | 'W'>('IPN');
   const [medidaColumna, setMedidaColumna] = useState('');
+  const [pesoColumna, setPesoColumna] = useState(''); 
   const [matReticuladoCol, setMatReticuladoCol] = useState<MaterialReticulado>('Angulo');
 
-  // Estructura Vigas
   const [tipoViga, setTipoViga] = useState<TipoViga>('Alma llena');
   const [subTipoViga, setSubTipoViga] = useState<'IPN' | 'W'>('IPN');
   const [medidaViga, setMedidaViga] = useState('');
+  const [pesoViga, setPesoViga] = useState(''); 
   const [matReticuladoViga, setMatReticuladoViga] = useState<MaterialReticulado>('Angulo');
 
-  // Cerramientos
   const [cerramientoLateral, setCerramientoLateral] = useState(false);
   const [cerramientoLateralChapa, setCerramientoLateralChapa] = useState('T-101');
   const [aislacionLateral, setAislacionLateral] = useState(false);
@@ -257,7 +202,6 @@ export default function CotizarScreen() {
   const [aislacionFrenteFondo, setAislacionFrenteFondo] = useState(false);
   const [tipoAislacionFrenteFondo, setTipoAislacionFrenteFondo] = useState('Burbuja 10mm');
   
-  // Accesos
   const [portones, setPortones] = useState(false);
   const [cantidadPortones, setCantidadPortones] = useState('');
   const [portonesAncho, setPortonesAncho] = useState('');
@@ -266,7 +210,6 @@ export default function CotizarScreen() {
   const [puertasAuxiliares, setPuertasAuxiliares] = useState(false);
   const [cantidadPuertasAuxiliares, setCantidadPuertasAuxiliares] = useState('');
 
-  // Techo y Accesorios
   const [aislacionTecho, setAislacionTecho] = useState(false);
   const [tipoAislacionTecho, setTipoAislacionTecho] = useState('Burbuja 10mm');
   
@@ -276,7 +219,6 @@ export default function CotizarScreen() {
   const [ventilacionEolica, setVentilacionEolica] = useState(false);
   const [cantEolicos, setCantEolicos] = useState('');
 
-  // Piso de Hormigón
   const [pisoHormigon, setPisoHormigon] = useState(false);
   const [tipoHormigon, setTipoHormigon] = useState<TipoHormigon>('H21 (Liviano)');
   const [espesorPiso, setEspesorPiso] = useState('15 cm');
@@ -285,23 +227,18 @@ export default function CotizarScreen() {
   const [hormigonEntrada, setHormigonEntrada] = useState(false);
   const [distanciaEntrada, setDistanciaEntrada] = useState('');
 
-  // Logística
   const [distanciaKm, setDistanciaKm] = useState('');
   const [incluirElevacion, setIncluirElevacion] = useState(false);
 
 
-  // --- LÓGICA DE CÁLCULO (FUSIÓN INTELIGENTE) ---
   const handleCalcular = async () => {
-    
-    // 1. Definimos los PRECIOS DE REFERENCIA (Argentina 2026)
     const defaults = {
-      // Materiales
-      precioAcero: 3.50,          
+      precioAceroEstructural: 3.50,
+      precioAceroTubular: 3.50,    
+      precioAcero: 3.50,           
       precioChapa: 18.00,         
       precioAislacion: 12.00,     
       precioPanelIgnifugo: 45.00, 
-
-      // Accesorios
       precioEolico: 150.00,           
       precioChapaTraslucida: 35.00,   
       precioPuertaEmergencia: 400.00, 
@@ -309,8 +246,6 @@ export default function CotizarScreen() {
       precioHormigonH21: 140.00,      
       precioHormigonH30: 160.00,      
       precioMallaCima: 8.00,          
-
-      // Mano de Obra y Logística
       tornilleriaFijaciones: 500.00, 
       selladoresZingueria: 5.00,     
       manoObraFabricacion: 1.50,     
@@ -320,19 +255,8 @@ export default function CotizarScreen() {
       mediosElevacion: 800.00,       
       logisticaFletes: 2.50,         
       viaticos: 300.00,              
-
-      // Márgenes
       margenGanancia: 25,            
       imprevistosContingencia: 5,    
-    };
-
-    // Pesos Específicos (Estos siempre son fijos si no se configuran)
-    const pesosDefault = {
-      pesosIPN: { 'IPN 200': 26.2, 'IPN 240': 36.2, 'IPN 300': 54.2, 'IPN 340': 68, 'IPN 400': 92.4, 'IPN 450': 115, 'IPN 500': 141 },
-      pesosW: { 'W 200': 30, 'W 250': 40, 'W 310': 50, 'W 360': 60, 'W 410': 70, 'W 460': 80 },
-      pesosTubo: { '100x100': 12, '120x120': 15, '140x140': 18, '160x160': 22, '180x180': 25, '200x200': 30, '220x220': 35, '260x260': 45 },
-      pesosPerfilC: { 'C 80': 6, 'C 100': 7.5, 'C 120': 9, 'C 140': 11, 'C 160': 13, 'C 180': 15, 'C 200': 17, 'C 220': 20 },
-      pesosReticulado: {},
     };
 
     let config: ConfigPrecios;
@@ -341,18 +265,15 @@ export default function CotizarScreen() {
       const stored = await AsyncStorage.getItem(STORAGE_KEY_PRECIOS);
       const userConfig = stored ? JSON.parse(stored) : {};
 
-      // 2. LÓGICA DE FUSIÓN:
-      // Si el usuario tiene un valor mayor a 0, usamos el suyo.
-      // Si tiene 0, null o no existe, usamos el DEFAULT.
-      
       const u = (val: any, def: number) => (val && parseFloat(val) > 0 ? parseFloat(val) : def);
 
       config = {
+        precioAceroEstructural: u(userConfig.precioAceroEstructural, defaults.precioAceroEstructural),
+        precioAceroTubular: u(userConfig.precioAceroTubular, defaults.precioAceroTubular),
         precioAcero: u(userConfig.precioAcero, defaults.precioAcero),
         precioChapa: u(userConfig.precioChapa, defaults.precioChapa),
         precioAislacion: u(userConfig.precioAislacion, defaults.precioAislacion),
         precioPanelIgnifugo: u(userConfig.precioPanelIgnifugo, defaults.precioPanelIgnifugo),
-        
         precioEolico: u(userConfig.precioEolico, defaults.precioEolico),
         precioChapaTraslucida: u(userConfig.precioChapaTraslucida, defaults.precioChapaTraslucida),
         precioPuertaEmergencia: u(userConfig.precioPuertaEmergencia, defaults.precioPuertaEmergencia),
@@ -360,7 +281,6 @@ export default function CotizarScreen() {
         precioHormigonH21: u(userConfig.precioHormigonH21, defaults.precioHormigonH21),
         precioHormigonH30: u(userConfig.precioHormigonH30, defaults.precioHormigonH30),
         precioMallaCima: u(userConfig.precioMallaCima, defaults.precioMallaCima),
-
         tornilleriaFijaciones: u(userConfig.tornilleriaFijaciones, defaults.tornilleriaFijaciones),
         selladoresZingueria: u(userConfig.selladoresZingueria, defaults.selladoresZingueria),
         manoObraFabricacion: u(userConfig.manoObraFabricacion, defaults.manoObraFabricacion),
@@ -370,73 +290,59 @@ export default function CotizarScreen() {
         mediosElevacion: u(userConfig.mediosElevacion, defaults.mediosElevacion),
         logisticaFletes: u(userConfig.logisticaFletes, defaults.logisticaFletes),
         viaticos: u(userConfig.viaticos, defaults.viaticos),
-
         margenGanancia: u(userConfig.margenGanancia, defaults.margenGanancia),
         imprevistosContingencia: u(userConfig.imprevistosContingencia, defaults.imprevistosContingencia),
-
-        // Objetos complejos (Tablas de peso)
-        pesosIPN: userConfig.pesosIPN || pesosDefault.pesosIPN,
-        pesosW: userConfig.pesosW || pesosDefault.pesosW,
-        pesosTubo: userConfig.pesosTubo || pesosDefault.pesosTubo,
-        pesosPerfilC: userConfig.pesosPerfilC || pesosDefault.pesosPerfilC,
-        pesosReticulado: userConfig.pesosReticulado || pesosDefault.pesosReticulado,
+        pesosIPN: userConfig.pesosIPN || {},
+        pesosW: userConfig.pesosW || {},
+        pesosTubo: userConfig.pesosTubo || {},
+        pesosPerfilC: userConfig.pesosPerfilC || {},
+        pesosReticulado: userConfig.pesosReticulado || {},
       };
 
-      // Aviso si estamos usando defaults (Opcional, para saber que pasó)
       if (!stored) {
          Alert.alert('Aviso', 'Usando precios de referencia global.');
       }
 
     } catch {
       Alert.alert('Error', 'Fallo al cargar precios. Usando referencia.');
-      // En caso de error total, forzamos defaults
-      config = { ...defaults, ...pesosDefault } as any; 
+      config = { ...defaults, pesosIPN: {}, pesosW: {}, pesosTubo: {}, pesosPerfilC: {}, pesosReticulado: {} } as any; 
     }
 
-    // Armado del objeto de datos explícito
     const datos: DatosCotizacion = {
       ancho: parseFloat(ancho) || 0,
       largo: parseFloat(largo) || 0,
       altoHombrera: parseFloat(altoHombrera) || 0,
       pendiente: parseFloat(pendiente) || 0,
-      
       tipoColumna: tipoColumna,
       subTipoColumna: tipoColumna === 'Alma llena' ? subTipoColumna : undefined,
       medidaColumna: medidaColumna,
+      pesoMetroColumna: parseFloat(pesoColumna) || 0,
       materialReticuladoColumna: tipoColumna === 'Reticulado' ? matReticuladoCol : undefined,
-
       tipoViga: tipoViga,
       subTipoViga: tipoViga === 'Alma llena' ? subTipoViga : undefined,
       medidaViga: medidaViga,
+      pesoMetroViga: parseFloat(pesoViga) || 0,
       materialReticuladoViga: tipoViga === 'Reticulado' ? matReticuladoViga : undefined,
-
       cerramientoLateral: cerramientoLateral,
       cerramientoLateralChapa: cerramientoLateralChapa,
       aislacionLateral: aislacionLateral,
       tipoAislacionLateral: tipoAislacionLateral,
-
       cerramientoFrenteFondo: cerramientoFrenteFondo,
       cerramientoFrenteFondoChapa: cerramientoFrenteFondoChapa,
       aislacionFrenteFondo: aislacionFrenteFondo,
       tipoAislacionFrenteFondo: tipoAislacionFrenteFondo,
-      
       portones: portones,
       cantidadPortones: parseInt(cantidadPortones) || 0,
       portonesAncho: parseFloat(portonesAncho) || 0,
       portonesAlto: parseFloat(portonesAlto) || 0,
-      
       puertasAuxiliares: puertasAuxiliares,
       cantidadPuertasAuxiliares: parseInt(cantidadPuertasAuxiliares) || 0,
-
       aislacionTecho: aislacionTecho,
       tipoAislacionTecho: tipoAislacionTecho,
-
       chapasTraslucidas: chapasTraslucidas,
       cantidadChapasTraslucidas: parseInt(cantTraslucidas) || 0,
-      
       ventilacionEolica: ventilacionEolica,
       cantidadEolicos: parseInt(cantEolicos) || 0,
-
       pisoHormigon: pisoHormigon,
       tipoHormigon: tipoHormigon,
       espesorPiso: espesorPiso,
@@ -444,7 +350,6 @@ export default function CotizarScreen() {
       hormigonEntrada: hormigonEntrada,
       distanciaEntrada: parseFloat(distanciaEntrada) || 0,
       terminacionPiso: terminacionPiso,
-
       distanciaKm: parseFloat(distanciaKm) || 0,
       incluirElevacion: incluirElevacion,
     };
@@ -459,12 +364,9 @@ export default function CotizarScreen() {
   };
 
 
-  // --- GUARDADO DE HISTORIAL (MANUAL EXTENDIDO) ---
-  
   const handleGuardarHistorial = async () => {
     if (resultadoCalculo === null || !desgloseCompleto) return;
 
-    // Construcción explícita del objeto para guardar, sin simplificaciones (...)
     const itemParaGuardar = {
       id: Date.now(),
       nombreProyecto: nombreProyecto.trim() || 'Proyecto Sin Nombre',
@@ -472,49 +374,43 @@ export default function CotizarScreen() {
       total: desgloseCompleto.total,
       subtotal: desgloseCompleto.subtotal,
       desglose: desgloseCompleto.desglose,
+      cantidades: desgloseCompleto.cantidades, 
+      ganancia: desgloseCompleto.ganancia, // NUEVO: Guardamos el dato de ganancia en el historial
       datosInput: {
         ancho: desgloseCompleto.datosInput.ancho,
         largo: desgloseCompleto.datosInput.largo,
         altoHombrera: desgloseCompleto.datosInput.altoHombrera,
         pendiente: desgloseCompleto.datosInput.pendiente,
-        
         tipoColumna: desgloseCompleto.datosInput.tipoColumna,
         subTipoColumna: desgloseCompleto.datosInput.subTipoColumna,
         medidaColumna: desgloseCompleto.datosInput.medidaColumna,
+        pesoMetroColumna: desgloseCompleto.datosInput.pesoMetroColumna,
         materialReticuladoColumna: desgloseCompleto.datosInput.materialReticuladoColumna,
-
         tipoViga: desgloseCompleto.datosInput.tipoViga,
         subTipoViga: desgloseCompleto.datosInput.subTipoViga,
         medidaViga: desgloseCompleto.datosInput.medidaViga,
+        pesoMetroViga: desgloseCompleto.datosInput.pesoMetroViga,
         materialReticuladoViga: desgloseCompleto.datosInput.materialReticuladoViga,
-
         cerramientoLateral: desgloseCompleto.datosInput.cerramientoLateral,
         cerramientoLateralChapa: desgloseCompleto.datosInput.cerramientoLateralChapa,
         aislacionLateral: desgloseCompleto.datosInput.aislacionLateral,
         tipoAislacionLateral: desgloseCompleto.datosInput.tipoAislacionLateral,
-
         cerramientoFrenteFondo: desgloseCompleto.datosInput.cerramientoFrenteFondo,
         cerramientoFrenteFondoChapa: desgloseCompleto.datosInput.cerramientoFrenteFondoChapa,
         aislacionFrenteFondo: desgloseCompleto.datosInput.aislacionFrenteFondo,
         tipoAislacionFrenteFondo: desgloseCompleto.datosInput.tipoAislacionFrenteFondo,
-
         portones: desgloseCompleto.datosInput.portones,
         cantidadPortones: desgloseCompleto.datosInput.cantidadPortones,
         portonesAncho: desgloseCompleto.datosInput.portonesAncho,
         portonesAlto: desgloseCompleto.datosInput.portonesAlto,
-
         puertasAuxiliares: desgloseCompleto.datosInput.puertasAuxiliares,
         cantidadPuertasAuxiliares: desgloseCompleto.datosInput.cantidadPuertasAuxiliares,
-
         aislacionTecho: desgloseCompleto.datosInput.aislacionTecho,
         tipoAislacionTecho: desgloseCompleto.datosInput.tipoAislacionTecho,
-
         chapasTraslucidas: desgloseCompleto.datosInput.chapasTraslucidas,
         cantidadChapasTraslucidas: desgloseCompleto.datosInput.cantidadChapasTraslucidas,
-
         ventilacionEolica: desgloseCompleto.datosInput.ventilacionEolica,
         cantidadEolicos: desgloseCompleto.datosInput.cantidadEolicos,
-
         pisoHormigon: desgloseCompleto.datosInput.pisoHormigon,
         tipoHormigon: desgloseCompleto.datosInput.tipoHormigon,
         espesorPiso: desgloseCompleto.datosInput.espesorPiso,
@@ -522,7 +418,6 @@ export default function CotizarScreen() {
         hormigonEntrada: desgloseCompleto.datosInput.hormigonEntrada,
         distanciaEntrada: desgloseCompleto.datosInput.distanciaEntrada,
         terminacionPiso: desgloseCompleto.datosInput.terminacionPiso,
-
         distanciaKm: desgloseCompleto.datosInput.distanciaKm,
         incluirElevacion: desgloseCompleto.datosInput.incluirElevacion,
       }
@@ -550,7 +445,6 @@ export default function CotizarScreen() {
           <Text style={styles.brandSubtitle}>Quicksheed - Sistema de Cálculo</Text>
         </View>
 
-        {/* NOMBRE */}
         <View style={styles.card}>
           <Text style={styles.label}>Nombre del Proyecto</Text>
           <TextInput
@@ -621,7 +515,7 @@ export default function CotizarScreen() {
           <SelectorOpciones
             opciones={OPCIONES_COLUMNA}
             valor={tipoColumna}
-            onSeleccionar={(v) => { setTipoColumna(v); setMedidaColumna(''); }}
+            onSeleccionar={(v) => { setTipoColumna(v); setMedidaColumna(''); setPesoColumna(''); }}
           />
 
           {tipoColumna === 'Alma llena' && (
@@ -631,12 +525,6 @@ export default function CotizarScreen() {
                 opciones={OPCIONES_SUBTIPO_PERFIL}
                 valor={subTipoColumna}
                 onSeleccionar={setSubTipoColumna}
-              />
-              <Text style={styles.subLabel}>Medida</Text>
-              <SelectorOpciones
-                opciones={subTipoColumna === 'IPN' ? MEDIDAS_IPN : MEDIDAS_W}
-                valor={medidaColumna}
-                onSeleccionar={setMedidaColumna}
               />
             </>
           )}
@@ -649,36 +537,32 @@ export default function CotizarScreen() {
                 valor={matReticuladoCol}
                 onSeleccionar={setMatReticuladoCol}
               />
-              <Text style={styles.subLabel}>Altura Reticulado</Text>
-              <SelectorOpciones
-                opciones={MEDIDAS_RETICULADO}
-                valor={medidaColumna}
-                onSeleccionar={setMedidaColumna}
-              />
             </>
           )}
 
-          {tipoColumna === 'Tubo' && (
-            <>
-              <Text style={styles.subLabel}>Medida del Tubo</Text>
-              <SelectorOpciones
-                opciones={MEDIDAS_TUBO}
-                valor={medidaColumna}
-                onSeleccionar={setMedidaColumna}
+          <View style={[styles.rowInputs, { marginTop: 12 }]}>
+            <View style={styles.halfInput}>
+              <Text style={styles.subLabel}>Etiqueta / Medida</Text>
+              <TextInput
+                style={styles.input}
+                placeholder={tipoColumna === 'Reticulado' ? "Ej: 400 mm" : "Ej: IPN 240 / Tubo 100"}
+                placeholderTextColor="#555"
+                value={medidaColumna}
+                onChangeText={setMedidaColumna}
               />
-            </>
-          )}
-
-          {tipoColumna === 'Perfil C' && (
-            <>
-              <Text style={styles.subLabel}>Medida Perfil C</Text>
-              <SelectorOpciones
-                opciones={MEDIDAS_PERFIL_C}
-                valor={medidaColumna}
-                onSeleccionar={setMedidaColumna}
+            </View>
+            <View style={styles.halfInput}>
+              <Text style={styles.subLabel}>Peso (kg/m)</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="Ej: 36.2"
+                placeholderTextColor="#555"
+                value={pesoColumna}
+                onChangeText={setPesoColumna}
               />
-            </>
-          )}
+            </View>
+          </View>
         </View>
 
         {/* 3. ESTRUCTURA VIGAS */}
@@ -687,7 +571,7 @@ export default function CotizarScreen() {
           <SelectorOpciones
             opciones={OPCIONES_VIGA}
             valor={tipoViga}
-            onSeleccionar={(v) => { setTipoViga(v); setMedidaViga(''); }}
+            onSeleccionar={(v) => { setTipoViga(v); setMedidaViga(''); setPesoViga(''); }}
           />
 
           {tipoViga === 'Alma llena' && (
@@ -697,12 +581,6 @@ export default function CotizarScreen() {
                 opciones={OPCIONES_SUBTIPO_PERFIL}
                 valor={subTipoViga}
                 onSeleccionar={setSubTipoViga}
-              />
-              <Text style={styles.subLabel}>Medida</Text>
-              <SelectorOpciones
-                opciones={subTipoViga === 'IPN' ? MEDIDAS_IPN : MEDIDAS_W}
-                valor={medidaViga}
-                onSeleccionar={setMedidaViga}
               />
             </>
           )}
@@ -715,25 +593,32 @@ export default function CotizarScreen() {
                 valor={matReticuladoViga}
                 onSeleccionar={setMatReticuladoViga}
               />
-              <Text style={styles.subLabel}>Altura Reticulado</Text>
-              <SelectorOpciones
-                opciones={MEDIDAS_RETICULADO}
-                valor={medidaViga}
-                onSeleccionar={setMedidaViga}
-              />
             </>
           )}
 
-          {tipoViga === 'Perfil C' && (
-            <>
-              <Text style={styles.subLabel}>Medida Perfil C</Text>
-              <SelectorOpciones
-                opciones={MEDIDAS_PERFIL_C}
-                valor={medidaViga}
-                onSeleccionar={setMedidaViga}
+          <View style={[styles.rowInputs, { marginTop: 12 }]}>
+            <View style={styles.halfInput}>
+              <Text style={styles.subLabel}>Etiqueta / Medida</Text>
+              <TextInput
+                style={styles.input}
+                placeholder={tipoViga === 'Reticulado' ? "Ej: 300 mm" : "Ej: Perfil C 120"}
+                placeholderTextColor="#555"
+                value={medidaViga}
+                onChangeText={setMedidaViga}
               />
-            </>
-          )}
+            </View>
+            <View style={styles.halfInput}>
+              <Text style={styles.subLabel}>Peso (kg/m)</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="Ej: 9"
+                placeholderTextColor="#555"
+                value={pesoViga}
+                onChangeText={setPesoViga}
+              />
+            </View>
+          </View>
         </View>
 
         {/* 4. CERRAMIENTOS */}
@@ -766,7 +651,6 @@ export default function CotizarScreen() {
         {/* 5. ACCESOS */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>5. Accesos</Text>
-          {/* Portones */}
           <View style={styles.row}>
             <Text style={styles.label}>Portones Industriales</Text>
             <Switch
@@ -811,7 +695,6 @@ export default function CotizarScreen() {
 
           <View style={styles.separator} />
 
-          {/* Puertas Aux */}
           <View style={styles.row}>
             <Text style={styles.label}>Puertas de Emergencia</Text>
             <Switch
@@ -1005,27 +888,42 @@ export default function CotizarScreen() {
           <View style={styles.resultadoBox}>
             <Text style={styles.resultadoLabel}>VALOR TOTAL ESTIMADO</Text>
             <Text style={styles.resultadoPrecio}>
-              USD {resultadoCalculo.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              USD {formatearMoneda(resultadoCalculo)}
             </Text>
 
             <View style={styles.desgloseContainer}>
+               <Text style={[styles.desgloseItem, { color: '#F59E0B', fontWeight: 'bold' }]}>
+                 Acero Total Requerido: {formatearMoneda(desgloseCompleto.cantidades.kgAceroTotal)} kg
+               </Text>
+               <Text style={[styles.desgloseItem, { color: '#F59E0B', fontWeight: 'bold', marginBottom: 10 }]}>
+                 Superficie a Cubrir: {formatearMoneda(desgloseCompleto.cantidades.areaChapaTotal)} m²
+               </Text>
+               <View style={styles.separator} />
+
                <Text style={styles.desgloseItem}>
-                 Materiales: USD {desgloseCompleto.desglose.materialesEstructura.toLocaleString('es-AR', {minimumFractionDigits: 2})}
+                 Materiales: USD {formatearMoneda(desgloseCompleto.desglose.materialesEstructura)}
                </Text>
                <Text style={styles.desgloseItem}>
-                 Cubiertas: USD {desgloseCompleto.desglose.cubiertasYAislaciones.toLocaleString('es-AR', {minimumFractionDigits: 2})}
+                 Cubiertas: USD {formatearMoneda(desgloseCompleto.desglose.cubiertasYAislaciones)}
                </Text>
                <Text style={styles.desgloseItem}>
-                 Accesorios: USD {desgloseCompleto.desglose.accesorios.toLocaleString('es-AR', {minimumFractionDigits: 2})}
+                 Accesorios: USD {formatearMoneda(desgloseCompleto.desglose.accesorios)}
                </Text>
                <Text style={styles.desgloseItem}>
-                 Obra Civil: USD {desgloseCompleto.desglose.pisoObraCivil.toLocaleString('es-AR', {minimumFractionDigits: 2})}
+                 Obra Civil: USD {formatearMoneda(desgloseCompleto.desglose.pisoObraCivil)}
                </Text>
                <Text style={styles.desgloseItem}>
-                 Mano de Obra: USD {desgloseCompleto.desglose.manoDeObra.toLocaleString('es-AR', {minimumFractionDigits: 2})}
+                 Mano de Obra: USD {formatearMoneda(desgloseCompleto.desglose.manoDeObra)}
                </Text>
                <Text style={styles.desgloseItem}>
-                 Logística: USD {desgloseCompleto.desglose.logisticaYOtros.toLocaleString('es-AR', {minimumFractionDigits: 2})}
+                 Logística: USD {formatearMoneda(desgloseCompleto.desglose.logisticaYOtros)}
+               </Text>
+               
+               <View style={styles.separator} />
+               
+               {/* NUEVO: RENGLÓN DE GANANCIA VISIBLE SOLO PARA VOS */}
+               <Text style={[styles.desgloseItem, { color: '#10B981', fontWeight: 'bold', fontSize: 16 }]}>
+                 Ganancia Neta ({desgloseCompleto.ganancia.porcentajeGanancia}%): USD {formatearMoneda(desgloseCompleto.ganancia.montoGanancia)}
                </Text>
             </View>
 

@@ -1,8 +1,56 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function InicioScreen() {
   const router = useRouter();
+
+  // --- LÓGICA DEL ESCUDO LEGAL ---
+  const handleNuevaCotizacion = async () => {
+    try {
+      // 1. Leemos la configuración guardada en el teléfono
+      const stored = await AsyncStorage.getItem('@cotizador_precios');
+      const config = stored ? JSON.parse(stored) : {};
+
+      // 2. Verificamos si faltan los precios clave (Acero, Chapa, Mano de Obra, Hormigón)
+      const faltanPrecios = 
+        !config.precioAceroEstructural || 
+        !config.precioChapa || 
+        !config.manoObraFabricacion || 
+        !config.precioHormigonH21;
+
+      // 3. Disparamos el Escudo Legal si falta algún dato
+      if (faltanPrecios) {
+        Alert.alert(
+          'DESLINDE DE RESPONSABILIDAD: VALORES ILUSTRATIVOS',
+          'Los montos calculados por esta herramienta son de carácter estrictamente ilustrativo y se basan en promedios referenciales de mercado en Argentina. Los mismos no representan una oferta comercial vinculante ni un presupuesto técnico final.\n\nEs responsabilidad exclusiva del usuario verificar y cargar sus costos reales (Acero, Chapa, Hormigón y Mano de Obra) en la sección "Configurar Precios" antes de emitir cualquier informe. El uso de esta información es bajo riesgo del usuario y los resultados están sujetos a cambios sin previo aviso.',
+          [
+            {
+              text: 'Cancelar',
+              style: 'cancel',
+            },
+            {
+              text: 'Estoy de acuerdo',
+              onPress: () => router.push('/cotizar'),
+            },
+          ]
+        );
+      } else {
+        // Si ya completó todos los precios base, lo dejamos pasar directo
+        router.push('/cotizar');
+      }
+    } catch (error) {
+      // Si ocurre un error de memoria, mostramos un aviso por seguridad
+      Alert.alert(
+        'Aviso de Seguridad',
+        'No pudimos verificar sus precios configurados. Proceda con precaución.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Continuar', onPress: () => router.push('/cotizar') }
+        ]
+      );
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -16,7 +64,7 @@ export default function InicioScreen() {
       {/* BOTONES: TODOS CON EL MISMO ESTILO GRIS OSCURO */}
       <TouchableOpacity 
         style={styles.secondaryButton} 
-        onPress={() => router.push('/cotizar')}
+        onPress={handleNuevaCotizacion}
         activeOpacity={0.8}
       >
         <Text style={styles.secondaryButtonText}>Nueva Cotización</Text>
